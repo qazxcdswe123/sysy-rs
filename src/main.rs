@@ -6,6 +6,7 @@ use std::io::{Result, Write};
 use ast::Dump;
 
 mod ast;
+mod riscv;
 
 // 引用 lalrpop 生成的解析器
 // 因为我们刚刚创建了 sysy.lalrpop, 所以模块名是 sysy
@@ -25,10 +26,22 @@ fn main() -> Result<()> {
 
     // 调用 lalrpop 生成的 parser 解析输入文件
     let ast = sysy::CompUnitParser::new().parse(&input).unwrap();
+    let koopa = ast.dump();
 
-    // 输出解析得到的 AST
-    let mut outfile = std::fs::File::create(output)?;
-    outfile.write_all(ast.dump().as_bytes())?;
+    match mode.as_str() {
+        "-koopa" => {
+            let mut outfile = std::fs::File::create(output)?;
+            writeln!(outfile, "{}", koopa)?;
+        }
+        "-riscv" => {
+            let asm = riscv::koopa2riscv(koopa).unwrap();
+            let mut outfile = std::fs::File::create(output)?;
+            writeln!(outfile, "{}", asm)?;
+        }
+        _ => {
+            panic!("Invalid mode");
+        }
+    }
 
     Ok(())
 }

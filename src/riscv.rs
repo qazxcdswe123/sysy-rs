@@ -20,7 +20,7 @@ impl GenerateASM for FunctionData {
         let mut asm = Vec::<String>::new();
         asm.push(format!("    .globl {}", &self.name()[1..]));
         asm.push(format!("{}:", &self.name()[1..]));
-        for (&bb, node) in self.layout().bbs() {
+        for (&_bb, node) in self.layout().bbs() {
             for &value in node.insts().keys() {
                 //
                 let value_data = self.dfg().value(value);

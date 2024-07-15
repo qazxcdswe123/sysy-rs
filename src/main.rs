@@ -1,11 +1,11 @@
+use koopa::back::KoopaGenerator;
 use lalrpop_util::lalrpop_mod;
 use std::env::args;
 use std::fs::read_to_string;
 use std::io::{Result, Write};
 
-use ast::Dump;
-
 mod ast;
+mod irgen;
 mod riscv;
 
 // 引用 lalrpop 生成的解析器
@@ -26,17 +26,17 @@ fn main() -> Result<()> {
 
     // 调用 lalrpop 生成的 parser 解析输入文件
     let ast = sysy::CompUnitParser::new().parse(&input).unwrap();
-    let koopa = ast.dump();
+
+    let koopa = irgen::generate_ir(&ast).expect("IR build error");
 
     match mode.as_str() {
         "-koopa" => {
-            let mut outfile = std::fs::File::create(output)?;
-            writeln!(outfile, "{}", koopa)?;
+            let mut text_generator = KoopaGenerator::new(vec![]);
+            text_generator.generate_on(&koopa).unwrap();
+            std::fs::write(output, text_generator.writer())?;
         }
         "-riscv" => {
-            let asm = riscv::koopa2riscv(koopa).unwrap();
-            let mut outfile = std::fs::File::create(output)?;
-            writeln!(outfile, "{}", asm)?;
+            unimplemented!()
         }
         _ => {
             panic!("Invalid mode");

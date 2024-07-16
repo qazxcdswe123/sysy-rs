@@ -31,7 +31,7 @@ Stmt: Stmt = {
 };
 
 Exp: Exp = {
-  <unary_exp: UnaryExp> => Exp::UnaryExp(<>),
+  <add_exp: AddExp> => Exp::AddExp(<>)
 };
 
 PrimaryExp: PrimaryExp = {
@@ -44,6 +44,19 @@ UnaryExp: UnaryExp = {
   "+" <unary_exp: UnaryExp> => UnaryExp::PlusUnaryExp(Box::new(<>)),
   "-" <unary_exp: UnaryExp> => UnaryExp::MinusUnaryExp(Box::new(<>)),
   "!" <unary_exp: UnaryExp> => UnaryExp::NotUnaryExp(Box::new(<>)),
+};
+
+AddExp: AddExp = {
+  <mul_exp: MulExp> => AddExp::MulExp(<>),
+  <add_exp: AddExp> "+" <mul_exp: MulExp> => AddExp::BinaryAddExp(Box::new(add_exp), mul_exp),
+  <add_exp: AddExp> "-" <mul_exp: MulExp> => AddExp::BinarySubExp(Box::new(add_exp), mul_exp),
+};
+
+MulExp: MulExp = {
+  <unary_exp: UnaryExp> => MulExp::UnaryExp(<>),
+  <mul_exp: MulExp> "*" <unary_exp: UnaryExp> => MulExp::BinaryMulExp(Box::new(mul_exp), unary_exp),
+  <mul_exp: MulExp> "/" <unary_exp: UnaryExp> => MulExp::BinaryDivExp(Box::new(mul_exp), unary_exp),
+  <mul_exp: MulExp> "%" <unary_exp: UnaryExp> => MulExp::BinaryModExp(Box::new(mul_exp), unary_exp),
 };
 
 Number: Number = {

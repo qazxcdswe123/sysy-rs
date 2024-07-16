@@ -94,7 +94,7 @@ impl DumpIR for Stmt {
 impl DumpIR for Exp {
     fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<(), String> {
         match self {
-            Exp::UnaryExp(u) => u.dump_ir(program, context),
+            Exp::AddExp(a) => a.dump_ir(program, context),
         }
     }
 }
@@ -127,6 +127,37 @@ impl DumpIR for PrimaryExp {
         match self {
             PrimaryExp::ParenExp(exp) => exp.dump_ir(program, context),
             PrimaryExp::Number(n) => n.dump_ir(program, context),
+        }
+    }
+}
+
+impl DumpIR for AddExp {
+    fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<(), String> {
+        match self {
+            AddExp::MulExp(m) => m.dump_ir(program, context),
+            AddExp::BinaryAddExp(lhs, rhs) => {
+                build_binary_expression(&**lhs, rhs, program, context, BinaryOp::Add)
+            }
+            AddExp::BinarySubExp(lhs, rhs) => {
+                build_binary_expression(&**lhs, rhs, program, context, BinaryOp::Sub)
+            }
+        }
+    }
+}
+
+impl DumpIR for MulExp {
+    fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<(), String> {
+        match self {
+            MulExp::UnaryExp(u) => u.dump_ir(program, context),
+            MulExp::BinaryMulExp(lhs, rhs) => {
+                build_binary_expression(&**lhs, rhs, program, context, BinaryOp::Mul)
+            }
+            MulExp::BinaryDivExp(lhs, rhs) => {
+                build_binary_expression(&**lhs, rhs, program, context, BinaryOp::Div)
+            }
+            MulExp::BinaryModExp(lhs, rhs) => {
+                build_binary_expression(&**lhs, rhs, program, context, BinaryOp::Mod)
+            }
         }
     }
 }

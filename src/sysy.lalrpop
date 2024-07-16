@@ -1,3 +1,22 @@
+/// CompUnit  ::= FuncDef;
+///
+/// FuncDef   ::= FuncType IDENT "(" ")" Block;
+/// FuncType  ::= "int";
+///
+/// Block     ::= "{" Stmt "}";
+/// Stmt        ::= "return" Exp ";";
+/// Exp         ::= LOrExp;
+/// PrimaryExp  ::= "(" Exp ")" | Number;
+/// Number      ::= INT_CONST;
+/// UnaryExp    ::= PrimaryExp | UnaryOp UnaryExp;
+/// UnaryOp     ::= "+" | "-" | "!";
+/// MulExp      ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp;
+/// AddExp      ::= MulExp | AddExp ("+" | "-") MulExp;
+/// RelExp      ::= AddExp | RelExp ("<" | ">" | "<=" | ">=") AddExp;
+/// EqExp       ::= RelExp | EqExp ("==" | "!=") RelExp;
+/// LAndExp     ::= EqExp | LAndExp "&&" EqExp;
+/// LOrExp      ::= LAndExp | LOrExp "||" LAndExp;
+
 // lalrpop 里的约定
 grammar;
 
@@ -31,7 +50,7 @@ Stmt: Stmt = {
 };
 
 Exp: Exp = {
-  <add_exp: AddExp> => Exp::AddExp(<>)
+  <lor_exp: LOrExp> => Exp::LOrExp(<>)
 };
 
 PrimaryExp: PrimaryExp = {
@@ -57,6 +76,30 @@ MulExp: MulExp = {
   <mul_exp: MulExp> "*" <unary_exp: UnaryExp> => MulExp::BinaryMulExp(Box::new(mul_exp), unary_exp),
   <mul_exp: MulExp> "/" <unary_exp: UnaryExp> => MulExp::BinaryDivExp(Box::new(mul_exp), unary_exp),
   <mul_exp: MulExp> "%" <unary_exp: UnaryExp> => MulExp::BinaryModExp(Box::new(mul_exp), unary_exp),
+};
+
+LOrExp: LOrExp = {
+  <land_exp: LAndExp> => LOrExp::LAndExp(<>),
+  <lor_exp: LOrExp> "||" <land_exp: LAndExp> => LOrExp::BinaryLOrExp(Box::new(lor_exp), land_exp),
+};
+
+LAndExp: LAndExp = {
+  <eq_exp: EqExp> => LAndExp::EqExp(<>),
+  <land_exp: LAndExp> "&&" <eq_exp: EqExp> => LAndExp::BinaryLAndExp(Box::new(land_exp), eq_exp),
+};
+
+EqExp: EqExp = {
+  <rel_exp: RelExp> => EqExp::RelExp(<>),
+  <eq_exp: EqExp> "==" <rel_exp: RelExp> => EqExp::BinaryEqExp(Box::new(eq_exp), rel_exp),
+  <eq_exp: EqExp> "!=" <rel_exp: RelExp> => EqExp::BinaryNeExp(Box::new(eq_exp), rel_exp),
+};
+
+RelExp: RelExp = {
+  <add_exp: AddExp> => RelExp::AddExp(<>),
+  <rel_exp: RelExp> "<" <add_exp: AddExp> => RelExp::BinaryLtExp(Box::new(rel_exp), add_exp),
+  <rel_exp: RelExp> ">" <add_exp: AddExp> => RelExp::BinaryGtExp(Box::new(rel_exp), add_exp),
+  <rel_exp: RelExp> "<=" <add_exp: AddExp> => RelExp::BinaryLeExp(Box::new(rel_exp), add_exp),
+  <rel_exp: RelExp> ">=" <add_exp: AddExp> => RelExp::BinaryGeExp(Box::new(rel_exp), add_exp),
 };
 
 Number: Number = {

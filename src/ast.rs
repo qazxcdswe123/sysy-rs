@@ -5,47 +5,44 @@
 ///
 /// Block     ::= "{" Stmt "}";
 /// Stmt        ::= "return" Exp ";";
-/// Exp         ::= AddExp;
+/// Exp         ::= LOrExp;
 /// PrimaryExp  ::= "(" Exp ")" | Number;
 /// Number      ::= INT_CONST;
 /// UnaryExp    ::= PrimaryExp | UnaryOp UnaryExp;
 /// UnaryOp     ::= "+" | "-" | "!";
 /// MulExp      ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp;
 /// AddExp      ::= MulExp | AddExp ("+" | "-") MulExp;
+/// RelExp      ::= AddExp | RelExp ("<" | ">" | "<=" | ">=") AddExp;
+/// EqExp       ::= RelExp | EqExp ("==" | "!=") RelExp;
+/// LAndExp     ::= EqExp | LAndExp "&&" EqExp;
+/// LOrExp      ::= LAndExp | LOrExp "||" LAndExp;
 
-#[derive(Debug)]
 pub struct CompUnit {
     pub func_def: FuncDef,
 }
 
-#[derive(Debug)]
 pub struct FuncDef {
     pub func_type: FuncType,
     pub ident: String,
     pub block: Block,
 }
 
-#[derive(Debug)]
 pub enum FuncType {
     Int,
 }
 
-#[derive(Debug)]
 pub struct Block {
     pub stmt: Stmt,
 }
 
-#[derive(Debug)]
 pub enum Stmt {
     Return(Exp),
 }
 
-#[derive(Debug)]
 pub enum Exp {
-    AddExp(AddExp)
+    LOrExp(LOrExp),
 }
 
-#[derive(Debug)]
 pub enum UnaryExp {
     PrimaryExp(PrimaryExp),
     PlusUnaryExp(Box<UnaryExp>),
@@ -53,28 +50,48 @@ pub enum UnaryExp {
     NotUnaryExp(Box<UnaryExp>),
 }
 
-#[derive(Debug)]
 pub enum PrimaryExp {
     ParenExp(Box<Exp>),
     Number(Number),
 }
 
-#[derive(Debug)]
 pub enum Number {
     IntConst(i32),
 }
 
-#[derive(Debug)]
 pub enum AddExp {
     MulExp(MulExp),
     BinaryAddExp(Box<AddExp>, MulExp),
     BinarySubExp(Box<AddExp>, MulExp),
 }
 
-#[derive(Debug)]
 pub enum MulExp {
     UnaryExp(UnaryExp),
     BinaryMulExp(Box<MulExp>, UnaryExp),
     BinaryDivExp(Box<MulExp>, UnaryExp),
     BinaryModExp(Box<MulExp>, UnaryExp),
+}
+
+pub enum LOrExp {
+    LAndExp(LAndExp),
+    BinaryLOrExp(Box<LOrExp>, LAndExp),
+}
+
+pub enum LAndExp {
+    EqExp(EqExp),
+    BinaryLAndExp(Box<LAndExp>, EqExp),
+}
+
+pub enum EqExp {
+    RelExp(RelExp),
+    BinaryEqExp(Box<EqExp>, RelExp),
+    BinaryNeExp(Box<EqExp>, RelExp),
+}
+
+pub enum RelExp {
+    AddExp(AddExp),
+    BinaryLtExp(Box<RelExp>, AddExp),
+    BinaryGtExp(Box<RelExp>, AddExp),
+    BinaryLeExp(Box<RelExp>, AddExp),
+    BinaryGeExp(Box<RelExp>, AddExp),
 }

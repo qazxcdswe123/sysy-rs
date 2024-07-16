@@ -6,7 +6,7 @@ use std::io::Result;
 
 mod ast;
 mod irgen;
-mod riscv;
+mod riscvgen;
 
 // 引用 lalrpop 生成的解析器
 // 因为我们刚刚创建了 sysy.lalrpop, 所以模块名是 sysy

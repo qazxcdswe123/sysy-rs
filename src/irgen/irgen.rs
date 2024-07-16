@@ -19,6 +19,18 @@ fn build_binary_expression(
     second_exp.dump_ir(program, context)?;
     let rhs = context.curr_value.unwrap();
 
+    build_binary_expression_from_value(program, context, op, lhs, rhs)?;
+
+    Ok(())
+}
+
+fn build_binary_expression_from_value(
+    program: &mut Program,
+    context: &mut IRContext,
+    op: BinaryOp,
+    lhs: koopa::ir::Value,
+    rhs: koopa::ir::Value,
+) -> Result<(), String> {
     let curr_func_data = program.func_mut(context.curr_func.unwrap());
     let new_value = curr_func_data.dfg_mut().new_value().binary(op, lhs, rhs);
     curr_func_data
@@ -27,7 +39,6 @@ fn build_binary_expression(
         .insts_mut()
         .extend([new_value]);
     context.curr_value = Some(new_value);
-
     Ok(())
 }
 
@@ -94,7 +105,7 @@ impl DumpIR for Stmt {
 impl DumpIR for Exp {
     fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<(), String> {
         match self {
-            Exp::AddExp(a) => a.dump_ir(program, context),
+            Exp::LOrExp(exp) => exp.dump_ir(program, context),
         }
     }
 }
@@ -157,6 +168,95 @@ impl DumpIR for MulExp {
             }
             MulExp::BinaryModExp(lhs, rhs) => {
                 build_binary_expression(&**lhs, rhs, program, context, BinaryOp::Mod)
+            }
+        }
+    }
+}
+
+impl DumpIR for LOrExp {
+    fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<(), String> {
+        match self {
+            LOrExp::LAndExp(l) => l.dump_ir(program, context),
+            LOrExp::BinaryLOrExp(lhs, rhs) => {
+                build_binary_expression(&**lhs, rhs, program, context, BinaryOp::NotEq)?;
+                let left_bool = context.curr_value.unwrap();
+                build_binary_expression(
+                    &Number::IntConst(0),
+                    rhs,
+                    program,
+                    context,
+                    BinaryOp::NotEq,
+                )?;
+                let right_bool = context.curr_value.unwrap();
+                build_binary_expression_from_value(
+                    program,
+                    context,
+                    BinaryOp::Or,
+                    left_bool,
+                    right_bool,
+                )
+            }
+        }
+    }
+}
+
+// TODO: FIx
+impl DumpIR for LAndExp {
+    fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<(), String> {
+        match self {
+            LAndExp::EqExp(e) => e.dump_ir(program, context),
+            LAndExp::BinaryLAndExp(lhs, rhs) => {
+                build_binary_expression(&**lhs, rhs, program, context, BinaryOp::NotEq)?;
+                let left_bool = context.curr_value.unwrap();
+                build_binary_expression(
+                    &Number::IntConst(0),
+                    rhs,
+                    program,
+                    context,
+                    BinaryOp::NotEq,
+                )?;
+                let right_bool = context.curr_value.unwrap();
+                build_binary_expression_from_value(
+                    program,
+                    context,
+                    BinaryOp::And,
+                    left_bool,
+                    right_bool,
+                )
+            }
+        }
+    }
+}
+
+impl DumpIR for EqExp {
+    fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<(), String> {
+        match self {
+            EqExp::RelExp(e) => e.dump_ir(program, context),
+            EqExp::BinaryEqExp(lhs, rhs) => {
+                build_binary_expression(&**lhs, rhs, program, context, BinaryOp::Eq)
+            }
+            EqExp::BinaryNeExp(lhs, rhs) => {
+                build_binary_expression(&**lhs, rhs, program, context, BinaryOp::NotEq)
+            }
+        }
+    }
+}
+
+impl DumpIR for RelExp {
+    fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<(), String> {
+        match self {
+            RelExp::AddExp(exp) => exp.dump_ir(program, context),
+            RelExp::BinaryLtExp(lhs, rhs) => {
+                build_binary_expression(&**lhs, rhs, program, context, BinaryOp::Lt)
+            }
+            RelExp::BinaryGtExp(lhs, rhs) => {
+                build_binary_expression(&**lhs, rhs, program, context, BinaryOp::Gt)
+            }
+            RelExp::BinaryLeExp(lhs, rhs) => {
+                build_binary_expression(&**lhs, rhs, program, context, BinaryOp::Le)
+            }
+            RelExp::BinaryGeExp(lhs, rhs) => {
+                build_binary_expression(&**lhs, rhs, program, context, BinaryOp::Ge)
             }
         }
     }

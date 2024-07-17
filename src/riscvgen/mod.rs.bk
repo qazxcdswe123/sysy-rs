@@ -1,0 +1,32 @@
+use koopa::ir::BinaryOp;
+
+mod register;
+mod riscv;
+
+trait BinaryOpDisplay {
+    fn display(&self) -> &str;
+}
+
+impl BinaryOpDisplay for BinaryOp {
+    fn display(&self) -> &str {
+        match self {
+            BinaryOp::Add => "add",
+            BinaryOp::Sub => "sub",
+            BinaryOp::Mul => "mul",
+            BinaryOp::Div => "div",
+            BinaryOp::Mod => "rem",
+            BinaryOp::And => "and",
+            BinaryOp::Or => "or",
+            BinaryOp::Xor => "xor",
+            BinaryOp::Lt => "slt",
+            BinaryOp::Gt => "sgt",
+            BinaryOp::Shl => "sll",
+            BinaryOp::Shr => "srl",
+            BinaryOp::Sar => "sra",
+            BinaryOp::Le => "sle",
+            BinaryOp::Ge => "sge",
+            BinaryOp::Eq => "seq",
+            BinaryOp::NotEq => "sne",
+        }
+    }
+}

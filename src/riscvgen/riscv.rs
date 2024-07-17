@@ -1,58 +1,141 @@
-use koopa::{front::Driver, ir::*};
+use koopa::ir::{values::Binary, Program};
 
-trait GenerateASM {
-    fn generate_asm(&self) -> Result<Vec<String>, String>;
+use crate::riscvgen::REGISTER_NAMES;
+
+pub trait ASMBuildable {
+    fn build(&self, program: &Program) -> Result<Vec<String>, String>;
 }
 
-impl GenerateASM for Program {
-    fn generate_asm(&self) -> Result<Vec<String>, String> {
-        let mut asm = Vec::<String>::new();
-        asm.push("    .text".to_string());
-        for &func in self.func_layout() {
-            asm.extend(self.func(func).generate_asm()?)
+impl ASMBuildable for Program {
+    fn build(&self, _program: &Program) -> Result<Vec<String>, String> {
+        let mut asm = vec![];
+
+        asm.push(format!("  .data"));
+        for &global in self.inst_layout() {
+            asm.extend(global)
         }
-        Ok(asm)
     }
 }
 
-impl GenerateASM for FunctionData {
-    fn generate_asm(&self) -> Result<Vec<String>, String> {
-        let mut asm = Vec::<String>::new();
-        asm.push(format!("    .globl {}", &self.name()[1..]));
-        asm.push(format!("{}:", &self.name()[1..]));
-        for (&_bb, node) in self.layout().bbs() {
-            for &value in node.insts().keys() {
-                //
-                let value_data = self.dfg().value(value);
-                match value_data.kind() {
-                    ValueKind::Return(ret_inst) => {
-                        match ret_inst.value() {
-                            Some(ret_val) => {
-                                let ret_data = self.dfg().value(ret_val);
-                                match ret_data.kind() {
-                                    ValueKind::Integer(int) => {
-                                        asm.push(format!("    li a0, {}", int.value()));
-                                    }
-                                    _ => unimplemented!(),
-                                }
-                            }
-                            None => {}
-                        }
-                        asm.push("    ret".to_string());
-                    }
-                    kind => return Err(format!("{:?}", kind)),
-                }
-            }
+fn binary_op_to_asm(binary: &Binary, result: usize, reg1: usize, reg2: usize) -> String {
+    match binary.op() {
+        koopa::ir::BinaryOp::Add => {
+            format!(
+                "  add\t{}, {}, {}",
+                REGISTER_NAMES[result], REGISTER_NAMES[reg1], REGISTER_NAMES[reg2],
+            )
         }
-        Ok(asm)
+        koopa::ir::BinaryOp::Sub => {
+            format!(
+                "  sub\t{}, {}, {}",
+                REGISTER_NAMES[result], REGISTER_NAMES[reg1], REGISTER_NAMES[reg2],
+            )
+        }
+        koopa::ir::BinaryOp::Mul => {
+            format!(
+                "  mul\t{}, {}, {}",
+                REGISTER_NAMES[result], REGISTER_NAMES[reg1], REGISTER_NAMES[reg2],
+            )
+        }
+        koopa::ir::BinaryOp::Div => {
+            format!(
+                "  div\t{}, {}, {}",
+                REGISTER_NAMES[result], REGISTER_NAMES[reg1], REGISTER_NAMES[reg2],
+            )
+        }
+        koopa::ir::BinaryOp::Mod => {
+            format!(
+                "  rem\t{}, {}, {}",
+                REGISTER_NAMES[result], REGISTER_NAMES[reg1], REGISTER_NAMES[reg2],
+            )
+        }
+        koopa::ir::BinaryOp::Eq => {
+            format!(
+                "  xor\t{}, {}, {}\n  seqz\t{}, {}",
+                REGISTER_NAMES[result],
+                REGISTER_NAMES[reg1],
+                REGISTER_NAMES[reg2],
+                REGISTER_NAMES[result],
+                REGISTER_NAMES[result],
+            ) // If a==b, then a^b==0.
+        }
+        koopa::ir::BinaryOp::NotEq => {
+            format!(
+                "  xor\t{}, {}, {}\n  snez\t{}, {}",
+                REGISTER_NAMES[result],
+                REGISTER_NAMES[reg1],
+                REGISTER_NAMES[reg2],
+                REGISTER_NAMES[result],
+                REGISTER_NAMES[result],
+            )
+        }
+        koopa::ir::BinaryOp::Lt => {
+            format!(
+                "  slt\t{}, {}, {}",
+                REGISTER_NAMES[result], REGISTER_NAMES[reg1], REGISTER_NAMES[reg2],
+            )
+        }
+        koopa::ir::BinaryOp::Gt => {
+            format!(
+                "  sgt\t{}, {}, {}",
+                REGISTER_NAMES[result], REGISTER_NAMES[reg1], REGISTER_NAMES[reg2],
+            )
+        }
+        koopa::ir::BinaryOp::Le => {
+            format!(
+                "  sgt\t{}, {}, {}\n  seqz\t{}, {}",
+                REGISTER_NAMES[result],
+                REGISTER_NAMES[reg1],
+                REGISTER_NAMES[reg2],
+                REGISTER_NAMES[result],
+                REGISTER_NAMES[result],
+            ) // LE is (not GT).
+        }
+        koopa::ir::BinaryOp::Ge => {
+            format!(
+                "  slt\t{}, {}, {}\n  seqz\t{}, {}",
+                REGISTER_NAMES[result],
+                REGISTER_NAMES[reg1],
+                REGISTER_NAMES[reg2],
+                REGISTER_NAMES[result],
+                REGISTER_NAMES[result],
+            ) // GE is (not LT).
+        }
+        koopa::ir::BinaryOp::And => {
+            format!(
+                "  and\t{}, {}, {}",
+                REGISTER_NAMES[result], REGISTER_NAMES[reg1], REGISTER_NAMES[reg2],
+            )
+        }
+        koopa::ir::BinaryOp::Or => {
+            format!(
+                "  or\t{}, {}, {}",
+                REGISTER_NAMES[result], REGISTER_NAMES[reg1], REGISTER_NAMES[reg2],
+            )
+        }
+        koopa::ir::BinaryOp::Xor => {
+            format!(
+                "  xor\t{}, {}, {}",
+                REGISTER_NAMES[result], REGISTER_NAMES[reg1], REGISTER_NAMES[reg2],
+            )
+        }
+        koopa::ir::BinaryOp::Shl => {
+            format!(
+                "  sll\t{}, {}, {}",
+                REGISTER_NAMES[result], REGISTER_NAMES[reg1], REGISTER_NAMES[reg2],
+            )
+        }
+        koopa::ir::BinaryOp::Shr => {
+            format!(
+                "  srl\t{}, {}, {}",
+                REGISTER_NAMES[result], REGISTER_NAMES[reg1], REGISTER_NAMES[reg2],
+            )
+        }
+        koopa::ir::BinaryOp::Sar => {
+            format!(
+                "  sra\t{}, {}, {}",
+                REGISTER_NAMES[result], REGISTER_NAMES[reg1], REGISTER_NAMES[reg2],
+            )
+        }
     }
-}
-
-pub fn koopa2riscv(koopa: String) -> Result<String, String> {
-    let driver = Driver::from(koopa);
-    let program = driver.generate_program().unwrap();
-
-    let riscv = program.generate_asm()?;
-
-    Ok(riscv.join("\n"))
 }

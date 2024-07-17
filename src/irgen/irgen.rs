@@ -200,7 +200,6 @@ impl DumpIR for LOrExp {
     }
 }
 
-// TODO: FIx
 impl DumpIR for LAndExp {
     fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<(), String> {
         match self {

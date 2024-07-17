@@ -1,0 +1,110 @@
+use std::{collections::HashMap, fmt::Display};
+
+use koopa::ir::{FunctionData, Value};
+
+#[warn(dead_code)]
+pub enum Registers {
+    X0, // Zero
+    Ra, // Return address
+    Sp, // Stack Pointer
+    Gp, // Global Pointer
+    Tp, // Thread Pointer
+    T0,
+    T1, // temporaries
+    T2,
+    T3,
+    T4,
+    T5,
+    T6,
+    A0, // args && return value
+    A1,
+    A2, // args
+    A3,
+    A4,
+    A5,
+    A6,
+    A7,
+    S0, // saved register / frame pointer
+    S1, // saved register
+    S2,
+    S3,
+    S4,
+    S5,
+    S6,
+    S7,
+    S8,
+    S9,
+    S10,
+    S11,
+}
+
+impl Display for Registers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Registers::X0 => write!(f, "x0"),
+            Registers::Ra => write!(f, "ra"),
+            Registers::Sp => write!(f, "sp"),
+            Registers::Gp => write!(f, "gp"),
+            Registers::Tp => write!(f, "tp"),
+            Registers::T0 => write!(f, "t0"),
+            Registers::T1 => write!(f, "t1"),
+            Registers::T2 => write!(f, "t2"),
+            Registers::T3 => write!(f, "t3"),
+            Registers::T4 => write!(f, "t4"),
+            Registers::T5 => write!(f, "t5"),
+            Registers::T6 => write!(f, "t6"),
+            Registers::A0 => write!(f, "a0"),
+            Registers::A1 => write!(f, "a1"),
+            Registers::A2 => write!(f, "a2"),
+            Registers::A3 => write!(f, "a3"),
+            Registers::A4 => write!(f, "a4"),
+            Registers::A5 => write!(f, "a5"),
+            Registers::A6 => write!(f, "a6"),
+            Registers::A7 => write!(f, "a7"),
+            Registers::S0 => write!(f, "s0"),
+            Registers::S1 => write!(f, "s1"),
+            Registers::S2 => write!(f, "s2"),
+            Registers::S3 => write!(f, "s3"),
+            Registers::S4 => write!(f, "s4"),
+            Registers::S5 => write!(f, "s5"),
+            Registers::S6 => write!(f, "s6"),
+            Registers::S7 => write!(f, "s7"),
+            Registers::S8 => write!(f, "s8"),
+            Registers::S9 => write!(f, "s9"),
+            Registers::S10 => write!(f, "s10"),
+            Registers::S11 => write!(f, "s11"),
+        }
+    }
+}
+
+pub enum Storage {
+    Reg(Registers),
+    /// Stack offset from sp, in bytes
+    Slot(FrameSlot),
+}
+
+pub enum FrameSlot {
+    /// return address
+    RetAddr,
+    /// local vars
+    Local(i32),
+    /// spilled vars
+    Spilled(i32),
+    /// saved regs
+    Saved(i32),
+    /// argument
+    Arg(i32),
+    /// parameter
+    Param(i32),
+}
+
+pub struct RegAlloc {
+    pub map: HashMap<Value, Storage>,
+    pub frame_size: i32,
+}
+
+impl RegAlloc {
+    pub fn new(func: &FunctionData) -> Self {
+
+    }
+}

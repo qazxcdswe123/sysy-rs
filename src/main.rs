@@ -2,7 +2,6 @@ use koopa::back::KoopaGenerator;
 use lalrpop_util::lalrpop_mod;
 use std::env::args;
 use std::fs::read_to_string;
-use std::io::Result;
 
 mod ast;
 mod irgen;
@@ -12,7 +11,7 @@ mod riscvgen;
 // 因为我们刚刚创建了 sysy.lalrpop, 所以模块名是 sysy
 lalrpop_mod!(sysy);
 
-fn main() -> Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 解析命令行参数
     let mut args = args();
     args.next();
@@ -36,7 +35,8 @@ fn main() -> Result<()> {
             std::fs::write(output, text_generator.writer())?;
         }
         "-riscv" => {
-            unimplemented!()
+            let mut output_file = std::fs::File::create(output)?;
+            riscvgen::generate_assembly(&koopa, &mut output_file)?;
         }
         _ => {
             panic!("Invalid mode");

@@ -82,8 +82,8 @@ mod riscv;
 use std::collections::HashMap;
 use std::io::Write;
 
-use riscv::AsmBuilder;
 use koopa::ir::{FunctionData, Program, Value};
+use riscv::AsmBuilder;
 
 pub fn generate_assembly(program: &Program, output_file: &mut std::fs::File) -> Result<(), String> {
     let codes = program.build(program)?;
@@ -119,9 +119,9 @@ const MIN_SHORT_INT: isize = -2048;
 pub struct MyBBValueTable<'a> {
     program: &'a Program,
     fd: &'a FunctionData,
-    curr_time: i32,
+    curr_time: usize,
     register_user: [Option<Value>; 32],
-    register_used_time: [i32; 32], // LRU registers
+    register_used_time: [usize; 32], // LRU registers
     local_value_location: HashMap<Value, usize>,
 }
 
@@ -148,17 +148,13 @@ impl MyBBValueTable<'_> {
     }
 
     fn __is_value_in_register(&self, value: Value) -> Option<usize> {
-        for i in 0..REGISTER_NAMES.len() {
-            match self.register_user[i] {
-                Some(v) => {
-                    if v == value {
-                        return Some(i);
-                    }
-                }
-                None => {}
+        self.register_user.iter().enumerate().find_map(|(i, &v)| {
+            if v == Some(value) {
+                Some(i)
+            } else {
+                None
             }
-        }
-        None
+        })
     }
 
     fn is_temp_value(&self, value: Value) -> bool {
@@ -317,7 +313,7 @@ impl MyBBValueTable<'_> {
     /// If all registers are being used, then kicks one.
     fn get_tmp_reg(&mut self) -> (usize, Vec<String>) {
         self.curr_time += 1;
-        let mut now_min = std::i32::MAX;
+        let mut now_min = std::usize::MAX;
         let mut possible_choice: Option<usize> = None;
         for i in REGISTER_FOR_TEMP {
             match self.register_user[i] {

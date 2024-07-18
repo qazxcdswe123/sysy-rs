@@ -2,58 +2,53 @@ use koopa::ir::{entities::ValueData, values::Binary, FunctionData, Program, Type
 
 use crate::riscvgen::*;
 
-// use super::ASMContext;
-
-// pub trait ASMBuildable {
-//     fn build(&self, program: &ASMContext) -> Result<Vec<String>, String>;
-// }
-
-// impl ASMBuildable for Program {
-//     fn build(&self, _program: &ASMContext) -> Result<Vec<String>, String> {
-//         let mut asm = vec![];
-
-//     }
-// }
-
-pub trait AssemblyBuildable {
+pub trait AsmBuilder {
     fn build(&self, program: &Program) -> Result<Vec<String>, String>;
 }
 
-impl AssemblyBuildable for Program {
+impl AsmBuilder for Program {
     fn build(&self, _: &Program) -> Result<Vec<String>, String> {
-        let mut program_codes = vec![];
+        let mut assembly_lines = vec![];
 
         // Assembly code of global variables
-        program_codes.push(format!("  .data"));
+        assembly_lines.push(format!("  .data"));
         for &global in self.inst_layout() {
-            program_codes.extend(self.borrow_value(global).build(self)?);
+            let global_assembly = self
+                .borrow_value(global)
+                .build(self)
+                .map_err(|e| format!("Error building global variable assembly: {}", e))?;
+            assembly_lines.extend(global_assembly);
         }
 
         // Assembly code of functions
-        program_codes.push(format!("  .text"));
+        assembly_lines.push(format!("  .text"));
         for &func in self.func_layout() {
-            if self.func(func).layout().bbs().len() > 0 {
-                program_codes.extend(self.func(func).build(self)?);
+            if !self.func(func).layout().bbs().is_empty() {
+                let func_ref = self.func(func);
+                let func_assembly = func_ref
+                    .build(self)
+                    .map_err(|e| format!("Error building function assembly: {}", e))?;
+                assembly_lines.extend(func_assembly);
             }
         }
-        Ok(program_codes)
+        Ok(assembly_lines)
     }
 }
 
-impl AssemblyBuildable for ValueData {
+impl AsmBuilder for ValueData {
     /// Used to handle global variable declarations.
     /// The ValueData's kind should be GlobalAlloc. Or it will panic.
     fn build(&self, program: &Program) -> Result<Vec<String>, String> {
         if let koopa::ir::ValueKind::GlobalAlloc(global) = self.kind() {
-            let mut codes = vec![];
-            codes.push(format!("{}:", &self.name().clone().unwrap()[1..]));
+            let mut assembly_lines = vec![];
+            assembly_lines.push(format!("{}:", &self.name().clone().unwrap()[1..]));
             let init_value_data = program.borrow_value(global.init());
             match init_value_data.kind() {
                 koopa::ir::ValueKind::Integer(int) => {
-                    codes.push(format!("  .word {}\n", int.value()));
+                    assembly_lines.push(format!("  .word {}\n", int.value()));
                 }
                 koopa::ir::ValueKind::ZeroInit(_) => {
-                    codes.push(format!("  .zero {}\n", init_value_data.ty().size()));
+                    assembly_lines.push(format!("  .zero {}\n", init_value_data.ty().size()));
                 }
                 value_kind => panic!(
                     "Global variable {} has wrong kind of initialization: {:?}! ",
@@ -61,14 +56,14 @@ impl AssemblyBuildable for ValueData {
                     value_kind
                 ),
             }
-            Ok(codes)
+            Ok(assembly_lines)
         } else {
             panic!("Not a global alloc instruction. ")
         }
     }
 }
 
-impl AssemblyBuildable for FunctionData {
+impl AsmBuilder for FunctionData {
     fn build(&self, program: &Program) -> Result<Vec<String>, String> {
         let mut prologue_codes = vec![];
         prologue_codes.push(format!("  .global {}", &self.name()[1..]));
@@ -454,7 +449,6 @@ impl AssemblyBuildable for FunctionData {
         Ok(all_codes)
     }
 }
-
 
 fn binary_op_to_asm(binary: &Binary, result: usize, reg1: usize, reg2: usize) -> String {
     match binary.op() {

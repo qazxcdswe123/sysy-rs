@@ -82,7 +82,7 @@ mod riscv;
 use std::collections::HashMap;
 use std::io::Write;
 
-use riscv::AssemblyBuildable;
+use riscv::AsmBuilder;
 use koopa::ir::{FunctionData, Program, Value};
 
 pub fn generate_assembly(program: &Program, output_file: &mut std::fs::File) -> Result<(), String> {

@@ -36,29 +36,38 @@ impl AsmBuilder for Program {
 }
 
 impl AsmBuilder for ValueData {
-    /// Used to handle global variable declarations.
-    /// The ValueData's kind should be GlobalAlloc. Or it will panic.
+    /// Handles global variable declarations.
+    /// Expects ValueData's kind to be GlobalAlloc, returns an error otherwise.
     fn build(&self, program: &Program) -> Result<Vec<String>, String> {
-        if let koopa::ir::ValueKind::GlobalAlloc(global) = self.kind() {
-            let mut assembly_lines = vec![];
-            assembly_lines.push(format!("{}:", &self.name().clone().unwrap()[1..]));
-            let init_value_data = program.borrow_value(global.init());
-            match init_value_data.kind() {
-                koopa::ir::ValueKind::Integer(int) => {
-                    assembly_lines.push(format!("  .word {}\n", int.value()));
+        match self.kind() {
+            koopa::ir::ValueKind::GlobalAlloc(global) => {
+                let mut assembly_lines = Vec::new();
+                let name = match self.name().as_ref().unwrap().strip_prefix('@') {
+                    Some(name) => {
+                        assembly_lines.push(format!("{}:", name));
+                        name
+                    }
+                    None => return Err("Global variable name is not valid.".to_string()),
+                };
+
+                let initializer = program.borrow_value(global.init());
+                match initializer.kind() {
+                    koopa::ir::ValueKind::Integer(int) => {
+                        assembly_lines.push(format!("  .word {}\n", int.value()));
+                    }
+                    koopa::ir::ValueKind::ZeroInit(_) => {
+                        assembly_lines.push(format!("  .zero {}\n", initializer.ty().size()));
+                    }
+                    _ => {
+                        return Err(format!(
+                            "Global variable {} has an unsupported kind of initialization.",
+                            name
+                        ))
+                    }
                 }
-                koopa::ir::ValueKind::ZeroInit(_) => {
-                    assembly_lines.push(format!("  .zero {}\n", init_value_data.ty().size()));
-                }
-                value_kind => panic!(
-                    "Global variable {} has wrong kind of initialization: {:?}! ",
-                    &self.name().clone().unwrap()[1..],
-                    value_kind
-                ),
+                Ok(assembly_lines)
             }
-            Ok(assembly_lines)
-        } else {
-            panic!("Not a global alloc instruction. ")
+            _ => Err("Attempted to build assembly for a non-global allocation.".to_string()),
         }
     }
 }

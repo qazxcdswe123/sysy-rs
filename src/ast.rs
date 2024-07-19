@@ -3,11 +3,14 @@
 /// FuncDef   ::= FuncType IDENT "(" ")" Block;
 /// FuncType  ::= "int";
 ///
-/// Block     ::= "{" Stmt "}";
+/// Block         ::= "{" {BlockItem} "}";
+/// BlockItem     ::= Decl | Stmt;
 /// Stmt        ::= "return" Exp ";";
 /// Exp         ::= LOrExp;
-/// PrimaryExp  ::= "(" Exp ")" | Number;
+/// PrimaryExp    ::= "(" Exp ")" | LVal | Number;
+/// ConstExp      ::= Exp;
 /// Number      ::= INT_CONST;
+/// LVal          ::= IDENT;
 /// UnaryExp    ::= PrimaryExp | UnaryOp UnaryExp;
 /// UnaryOp     ::= "+" | "-" | "!";
 /// MulExp      ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp;
@@ -16,6 +19,11 @@
 /// EqExp       ::= RelExp | EqExp ("==" | "!=") RelExp;
 /// LAndExp     ::= EqExp | LAndExp "&&" EqExp;
 /// LOrExp      ::= LAndExp | LOrExp "||" LAndExp;
+///
+/// Decl          ::= ConstDecl;
+/// ConstDecl     ::= "const" FuncType ConstDef {"," ConstDef} ";";
+/// ConstDef      ::= IDENT "=" ConstInitVal;
+/// ConstInitVal  ::= ConstExp;
 
 pub struct CompUnit {
     pub func_def: FuncDef,
@@ -32,7 +40,34 @@ pub enum FuncType {
 }
 
 pub struct Block {
-    pub stmt: Stmt,
+    pub items: Vec<BlockItem>,
+}
+
+pub enum BlockItem {
+    Decl(Decl),
+    Stmt(Stmt),
+}
+
+pub enum Decl {
+    ConstDecl(ConstDecl),
+}
+
+pub struct ConstDecl {
+    pub btype: FuncType,
+    pub const_defs: Vec<ConstDef>,
+}
+
+pub struct ConstDef {
+    pub ident: String,
+    pub const_init_val: ConstInitVal,
+}
+
+pub enum ConstInitVal {
+    ConstExp(ConstExp),
+}
+
+pub struct ConstExp {
+    pub exp: Exp,
 }
 
 pub enum Stmt {
@@ -53,6 +88,11 @@ pub enum UnaryExp {
 pub enum PrimaryExp {
     ParenExp(Box<Exp>),
     Number(Number),
+    LVal(LVal),
+}
+
+pub struct LVal {
+    pub ident: String,
 }
 
 pub enum Number {

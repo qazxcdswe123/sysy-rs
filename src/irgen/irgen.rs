@@ -77,8 +77,17 @@ impl DumpIR for FuncDef {
 
 impl DumpIR for Block {
     fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<(), String> {
-        self.stmt.dump_ir(program, context)?;
+        // self.stmt.dump_ir(program, context)?;
+        for ele in &self.items {
+            ele.dump_ir(program, context)?;
+        }
         Ok(())
+    }
+}
+
+impl DumpIR for BlockItem {
+    fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<(), String> {
+        todo!()
     }
 }
 
@@ -138,7 +147,14 @@ impl DumpIR for PrimaryExp {
         match self {
             PrimaryExp::ParenExp(exp) => exp.dump_ir(program, context),
             PrimaryExp::Number(n) => n.dump_ir(program, context),
+            PrimaryExp::LVal(lval) => lval.dump_ir(program, context),
         }
+    }
+}
+
+impl DumpIR for LVal {
+    fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<(), String> {
+        todo!()
     }
 }
 

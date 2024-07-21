@@ -1,3 +1,5 @@
+use koopa::ir::TypeKind;
+
 /// CompUnit  ::= FuncDef;
 ///
 /// FuncDef   ::= FuncType IDENT "(" ")" Block;
@@ -5,7 +7,7 @@
 ///
 /// Block         ::= "{" {BlockItem} "}";
 /// BlockItem     ::= Decl | Stmt;
-/// Stmt        ::= "return" Exp ";";
+/// Stmt          ::= LVal "=" Exp ";" | "return" Exp ";";
 /// Exp         ::= LOrExp;
 /// PrimaryExp    ::= "(" Exp ")" | LVal | Number;
 /// ConstExp      ::= Exp;
@@ -20,8 +22,11 @@
 /// LAndExp     ::= EqExp | LAndExp "&&" EqExp;
 /// LOrExp      ::= LAndExp | LOrExp "||" LAndExp;
 ///
-/// Decl          ::= ConstDecl;
+/// Decl          ::= ConstDecl | VarDecl;
 /// ConstDecl     ::= "const" FuncType ConstDef {"," ConstDef} ";";
+/// VarDecl       ::= BType VarDef {"," VarDef} ";";
+/// VarDef        ::= IDENT | IDENT "=" InitVal;
+/// InitVal       ::= Exp;
 /// ConstDef      ::= IDENT "=" ConstInitVal;
 /// ConstInitVal  ::= ConstExp;
 
@@ -29,14 +34,18 @@ pub struct CompUnit {
     pub func_def: FuncDef,
 }
 
+pub struct IDENT {
+    pub id: String,
+}
+
 pub struct FuncDef {
-    pub func_type: FuncType,
-    pub ident: String,
+    pub func_type: BType,
+    pub ident: IDENT,
     pub block: Block,
 }
 
-pub enum FuncType {
-    Int,
+pub struct BType {
+    pub ty: TypeKind,
 }
 
 pub struct Block {
@@ -50,15 +59,30 @@ pub enum BlockItem {
 
 pub enum Decl {
     ConstDecl(ConstDecl),
+    VarDecl(VarDecl),
+}
+
+pub struct VarDecl {
+    pub btype: BType,
+    pub var_defs: Vec<VarDef>,
+}
+
+pub enum VarDef {
+    WithoutInit(IDENT),
+    WithInitVal(IDENT, InitVal),
+}
+
+pub enum InitVal {
+    Exp(Exp),
 }
 
 pub struct ConstDecl {
-    pub btype: FuncType,
+    pub btype: BType,
     pub const_defs: Vec<ConstDef>,
 }
 
 pub struct ConstDef {
-    pub ident: String,
+    pub ident: IDENT,
     pub const_init_val: ConstInitVal,
 }
 
@@ -71,7 +95,8 @@ pub struct ConstExp {
 }
 
 pub enum Stmt {
-    Return(Exp),
+    ReturnStmt(Exp),
+    AssignStmt(LVal, Exp),
 }
 
 pub enum Exp {
@@ -92,7 +117,7 @@ pub enum PrimaryExp {
 }
 
 pub struct LVal {
-    pub ident: String,
+    pub ident: IDENT,
 }
 
 pub enum Number {

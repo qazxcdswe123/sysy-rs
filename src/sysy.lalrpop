@@ -1,3 +1,5 @@
+use koopa::ir::types::TypeKind;
+
 // lalrpop 里的约定
 grammar;
 
@@ -17,12 +19,14 @@ match {
 pub CompUnit: CompUnit = <func_def: FuncDef> => CompUnit { <> };
 
 FuncDef: FuncDef = {
-  <func_type: FuncType> <ident: Ident> "(" ")" <block: Block> => {
+  <func_type: BType> <ident: IDENT> "(" ")" <block: Block> => {
     FuncDef { <> }
   }
 }
 
-FuncType: FuncType = "int" => FuncType::Int;
+BType: BType = {
+  "int" => BType { ty: TypeKind::Int32 },
+}
 
 Block: Block = "{" <items: ( BlockItem )*> "}" => Block { <> };
 
@@ -33,15 +37,34 @@ BlockItem: BlockItem = {
 
 Decl: Decl = {
   <const_decl: ConstDecl> => Decl::ConstDecl(<>),
+  <var_decl: VarDecl> => Decl::VarDecl(<>),
 }
 
-ConstDef: ConstDef = <ident: Ident> "=" <const_init_val: ConstInitVal> => ConstDef{ident, const_init_val};
+VarDecl: VarDecl = <btype: BType> <var_def: VarDef> <defs: ("," <VarDef>)*> ";" => {
+  let mut var_defs = Vec::<VarDef>::new();
+  var_defs.push(var_def);
+  for d in defs {
+    var_defs.push(d);
+  }
+  VarDecl {btype, var_defs}
+};
+
+VarDef: VarDef = {
+  <ident: IDENT> => VarDef::WithoutInit(<>),
+  <ident: IDENT> "=" <init: InitVal> => VarDef::WithInitVal(ident, init),
+}
+
+InitVal: InitVal = {
+  <exp: Exp> => InitVal::Exp(<>),
+};
+
+ConstDef: ConstDef = <ident: IDENT> "=" <const_init_val: ConstInitVal> => ConstDef{ident, const_init_val};
 
 ConstInitVal: ConstInitVal = <exp: ConstExp> => ConstInitVal::ConstExp(<>);
 
 ConstExp: ConstExp = <exp: Exp> => ConstExp{ <> };
 
-ConstDecl: ConstDecl = "const" <btype: FuncType> <const_def: ConstDef> <defs: ("," <ConstDef>)*> ";" => {
+ConstDecl: ConstDecl = "const" <btype: BType> <const_def: ConstDef> <defs: ("," <ConstDef>)*> ";" => {
   let mut const_defs = Vec::<ConstDef>::new();
   const_defs.push(const_def);
   for d in defs {
@@ -51,7 +74,8 @@ ConstDecl: ConstDecl = "const" <btype: FuncType> <const_def: ConstDef> <defs: ("
 };
 
 Stmt: Stmt = {
-  "return" <exp: Exp> ";" => Stmt::Return(<>),
+  <lval: LVal> "=" <exp: Exp> ";" => Stmt::AssignStmt(lval, exp),
+  "return" <exp: Exp> ";" => Stmt::ReturnStmt(<>),
 };
 
 Exp: Exp = {
@@ -64,7 +88,7 @@ PrimaryExp: PrimaryExp = {
   LVal => PrimaryExp::LVal(<>),
 };
 
-LVal: LVal = <ident: Ident> => LVal{<>};
+LVal: LVal = <ident: IDENT> => LVal{<>};
 
 UnaryExp: UnaryExp = {
   <primary_exp: PrimaryExp> => UnaryExp::PrimaryExp(<>),
@@ -117,7 +141,7 @@ Number: Number = {
 // 如果匹配到标识符, 就返回这个字符串
 // 一对尖括号在此处指代的是正则表达式匹配到的字符串 (&str)
 // 关于尖括号到底代表什么, 请 RTFM
-Ident: String = r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.to_string();
+IDENT: IDENT = r"[_a-zA-Z][_a-zA-Z0-9]*" => IDENT{ id: <>.to_string() };
 
 // 对整数字面量的处理方式: 把匹配到的字符串按对应进制转换成数字
 IntConst: i32 = {

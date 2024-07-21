@@ -1,5 +1,6 @@
 use irgen::DumpIR;
 use koopa::ir::{
+    builder::LocalBuilder,
     entities::{BasicBlock, Function},
     Program, Value,
 };
@@ -24,4 +25,11 @@ pub struct IRContext {
     curr_block: Option<BasicBlock>,
     curr_func: Option<Function>,
     curr_value: Option<Value>,
+}
+
+fn new_value<'a>(program: &'a mut Program, context: &'a mut IRContext) -> LocalBuilder<'a> {
+    program
+        .func_mut(context.curr_func.unwrap())
+        .dfg_mut()
+        .new_value()
 }

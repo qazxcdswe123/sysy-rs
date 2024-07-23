@@ -54,13 +54,11 @@ impl DumpIR for CompUnit {
 
 impl DumpIR for FuncDef {
     fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<(), String> {
-        let ret_ty = match self.func_type {
-            FuncType::Int => Type::get_i32(),
-        };
+        let ret_ty = self.func_type.ty.clone();
         let func = program.new_func(FunctionData::with_param_names(
             "@".to_string() + self.ident.id.as_str(),
             vec![],
-            ret_ty,
+            Type::get(ret_ty),
         ));
         let func_data = program.func_mut(func);
         let new_block = func_data

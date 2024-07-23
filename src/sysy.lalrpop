@@ -240,14 +240,14 @@ InitVal: Span<InitVal> = {
 }
 
 ConstDecl: Span<ConstDecl> = {
-  <start:@L> "const" <ty: BType> <mut defs: (<ConstDef> ",")*> <def: ConstDef> ";" <end:@R> => {
-    defs.push(def);
-    ConstDecl { ty, defs }.into_span(start, end)
+  <start:@L> "const" <ty: BType> <mut const_defs: (<ConstDef> ",")*> <def: ConstDef> ";" <end:@R> => {
+    const_defs.push(def);
+    ConstDecl { ty, const_defs }.into_span(start, end)
   }
 }
 
 ConstDef: ConstDef = {
-  <ident: Ident> "=" <init:InitVal> => ConstDef { ident, init }
+  <ident: Ident> "=" <const_init_val:InitVal> => ConstDef { ident, const_init_val }
 }
 
 ConstExp: ConstExp = {
@@ -256,7 +256,7 @@ ConstExp: ConstExp = {
 
 Stmt: Span<Stmt> = {
   <start:@L> "return" <exp: Exp?> ";" <end:@R> => Stmt::ReturnStmt(exp).into_span(start, end),
-  <start:@L> <lhs: LVal> "=" <rhs: Exp> ";" <end:@R> => Stmt::AssignStmt { lhs, rhs }.into_span(start, end)
+  <start:@L> <lhs: Ident> "=" <rhs: Exp> ";" <end:@R> => Stmt::AssignStmt { lhs, rhs }.into_span(start, end)
 }
 
 Exp: Exp = <lor_exp: LOrExp> => lor_exp;

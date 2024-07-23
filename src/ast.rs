@@ -260,7 +260,7 @@ impl Spanned for Decl {
 #[derive(Clone)]
 pub struct ConstDecl {
     pub ty: Span<BType>,
-    pub defs: Vec<ConstDef>,
+    pub const_defs: Vec<ConstDef>,
 }
 
 impl IntoSpan for ConstDecl {}
@@ -282,7 +282,7 @@ pub struct VarDef {
 #[derive(Clone)]
 pub struct ConstDef {
     pub ident: Span<String>,
-    pub init: Span<InitVal>,
+    pub const_init_val: Span<InitVal>,
 }
 
 #[derive(Clone)]
@@ -345,7 +345,7 @@ impl IntoSpan for LVal {}
 #[derive(Clone)]
 pub enum Stmt {
     ReturnStmt(Option<Exp>),
-    AssignStmt { lhs: Span<LVal>, rhs: Exp },
+    AssignStmt { lhs: Span<String>, rhs: Exp },
     // BlockStmt { block: Span<Block> },
     // ExpStmt { exp: Exp },
 }
@@ -355,3 +355,7 @@ impl IntoSpan for Stmt {}
 impl IntoSpan for String {}
 
 impl IntoSpan for i32 {}
+
+pub struct ConstExp {
+    pub exp: Exp,
+}

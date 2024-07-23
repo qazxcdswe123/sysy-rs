@@ -26,8 +26,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 调用 lalrpop 生成的 parser 解析输入文件
     let ast = sysy::CompUnitParser::new().parse(&input).unwrap();
 
-    let koopa = ast.build_ir();
-    
+    let koopa = irgen::generate_ir(&ast).expect("IR build error");
+
     match mode.as_str() {
         "-koopa" => {
             let mut text_generator = KoopaGenerator::new(vec![]);

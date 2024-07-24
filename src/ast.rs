@@ -7,7 +7,10 @@ use koopa::ir::TypeKind;
 ///
 /// Block         ::= "{" {BlockItem} "}";
 /// BlockItem     ::= Decl | Stmt;
-/// Stmt          ::= LVal "=" Exp ";" | "return" Exp ";";
+/// Stmt          ::= LVal "=" Exp ";" 
+///                 | [Exp] ";"
+///                 | Block
+///                 | "return" Exp ";";
 /// Exp         ::= LOrExp;
 /// PrimaryExp    ::= "(" Exp ")" | LVal | Number;
 /// ConstExp      ::= Exp;

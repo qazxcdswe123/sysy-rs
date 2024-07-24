@@ -9,6 +9,8 @@ target/
 # Test files
 /*.c
 /*.kp
+/*.koopa
+/*.riscv
 
 
 # Added by cargo

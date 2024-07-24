@@ -11,7 +11,11 @@ use crate::ast::CompUnit;
 mod irgen;
 
 pub trait DumpIR {
-    fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<ConstOrValue, String>;
+    fn dump_ir(
+        &self,
+        program: &mut Program,
+        context: &mut IRContext,
+    ) -> Result<ConstOrValue, String>;
 }
 
 pub fn generate_ir(comp_unit: &CompUnit) -> Result<Program, String> {
@@ -19,7 +23,9 @@ pub fn generate_ir(comp_unit: &CompUnit) -> Result<Program, String> {
     let mut context = IRContext {
         curr_block: None,
         curr_func: None,
-        symbol_table: HashMap::new(),
+        symbol_tables: SymbolTables {
+            symbol_tables: vec![HashMap::new()],
+        },
     };
 
     comp_unit.dump_ir(&mut program, &mut context)?;
@@ -37,7 +43,11 @@ pub enum ConstOrValue {
 pub struct IRContext {
     curr_block: Option<BasicBlock>,
     curr_func: Option<Function>,
-    symbol_table: HashMap<String, SymbolTableEntry>,
+    symbol_tables: SymbolTables,
+}
+
+pub struct SymbolTables {
+    symbol_tables: Vec<HashMap<String, SymbolTableEntry>>,
 }
 
 pub enum SymbolTableEntry {
@@ -45,12 +55,30 @@ pub enum SymbolTableEntry {
     Constant(TypeKind, Vec<i32>),
 }
 
-impl std::fmt::Debug for SymbolTableEntry {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SymbolTableEntry::Variable(tk, v) => write!(f, "Variable {}: {:?}", tk, v),
-            SymbolTableEntry::Constant(tk, v) => write!(f, "Constant {}: {:?}", tk, v),
+impl SymbolTables {
+    fn get(&self, name: &String) -> Option<&SymbolTableEntry> {
+        for table in self.symbol_tables.iter().rev() {
+            if let Some(entry) = table.get(name) {
+                return Some(entry);
+            }
         }
+        None
+    }
+
+    fn insert(&mut self, name: String, entry: SymbolTableEntry) {
+        self.symbol_tables.last_mut().unwrap().insert(name, entry);
+    }
+
+    fn new_table(&mut self) {
+        self.symbol_tables.push(HashMap::new());
+    }
+
+    fn pop_table(&mut self) {
+        self.symbol_tables.pop();
+    }
+
+    fn depth(&self) -> usize {
+        self.symbol_tables.len() - 1
     }
 }
 

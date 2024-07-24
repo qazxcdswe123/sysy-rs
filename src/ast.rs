@@ -7,7 +7,7 @@ use koopa::ir::TypeKind;
 ///
 /// Block         ::= "{" {BlockItem} "}";
 /// BlockItem     ::= Decl | Stmt;
-/// Stmt          ::= LVal "=" Exp ";" 
+/// Stmt          ::= LVal "=" Exp ";"
 ///                 | [Exp] ";"
 ///                 | Block
 ///                 | "return" Exp ";";
@@ -98,8 +98,10 @@ pub struct ConstExp {
 }
 
 pub enum Stmt {
-    ReturnStmt(Exp),
     AssignStmt(LVal, Exp),
+    ReturnStmt(Option<Exp>),
+    ExpStmt(Option<Exp>),
+    BlockStmt(Block),
 }
 
 pub enum Exp {

@@ -120,14 +120,18 @@ impl DumpIR for Block {
         program: &mut Program,
         context: &mut IRContext,
     ) -> Result<ConstOrValue, String> {
+        let mut block_res = ConstOrValue::Const(0);
+        context.symbol_tables.new_table();
         for item in &self.items {
-            item.dump_ir(program, context)?;
-            // ignore everything after return
-            if let Some(SymbolTableEntry::Variable(_, _)) = context.symbol_table.get("return") {
+            let res = item.dump_ir(program, context)?;
+            // return in block
+            if let ConstOrValue::Const(-1) = res {
+                block_res = res;
                 break;
             }
         }
-        Ok(ConstOrValue::Const(0))
+        context.symbol_tables.pop_table();
+        Ok(block_res)
     }
 }
 
@@ -173,10 +177,11 @@ impl DumpIR for VarDecl {
                         .dfg_mut()
                         .new_value()
                         .alloc(Type::get(btype.ty.clone()));
-                    curr_func
-                        .dfg_mut()
-                        .set_value_name(val, Some(format!("@{}", ident.id)));
-                    context.symbol_table.insert(
+                    curr_func.dfg_mut().set_value_name(
+                        val,
+                        Some(format!("@{}_{}", ident.id, context.symbol_tables.depth())),
+                    );
+                    context.symbol_tables.insert(
                         ident.id.clone(),
                         SymbolTableEntry::Variable(btype.ty.clone(), val),
                     );
@@ -198,11 +203,12 @@ impl DumpIR for VarDecl {
                         .dfg_mut()
                         .new_value()
                         .alloc(Type::get(btype.ty.clone()));
-                    curr_func_data
-                        .dfg_mut()
-                        .set_value_name(val, Some(format!("@{}", ident.id)));
+                    curr_func_data.dfg_mut().set_value_name(
+                        val,
+                        Some(format!("@{}_{}", ident.id, context.symbol_tables.depth())),
+                    );
                     let store = curr_func_data.dfg_mut().new_value().store(rhs_value, val);
-                    context.symbol_table.insert(
+                    context.symbol_tables.insert(
                         ident.id.clone(),
                         SymbolTableEntry::Variable(btype.ty.clone(), val),
                     );
@@ -240,7 +246,7 @@ impl DumpIR for ConstDecl {
             let res = const_def.const_init_val.dump_ir(program, context)?;
             match res {
                 ConstOrValue::Const(c) => {
-                    context.symbol_table.insert(
+                    context.symbol_tables.insert(
                         const_def.ident.id.clone(),
                         SymbolTableEntry::Constant(ty.clone(), vec![c]),
                     );
@@ -286,14 +292,19 @@ impl DumpIR for Stmt {
     ) -> Result<ConstOrValue, String> {
         match self {
             Stmt::ReturnStmt(ret_exp) => {
-                let res = ret_exp.dump_ir(program, context)?;
-                let val = match res {
-                    ConstOrValue::Const(c) => new_value(program, context).integer(c),
-                    ConstOrValue::Value(v) => v,
+                let res = match ret_exp {
+                    Some(exp) => Some({
+                        let res = exp.dump_ir(program, context)?;
+                        match res {
+                            ConstOrValue::Const(c) => new_value(program, context).integer(c),
+                            ConstOrValue::Value(v) => v,
+                        }
+                    }),
+                    None => None,
                 };
-                let ret_stmt = new_value(program, context).ret(Some(val));
+                let ret_stmt = new_value(program, context).ret(res);
                 insert_instructions(program, context, [ret_stmt]);
-                Ok(ConstOrValue::Const(0))
+                Ok(ConstOrValue::Const(-1))
             }
             Stmt::AssignStmt(lval, rhs_exp) => {
                 let res1 = lval.dump_ir(program, context)?;
@@ -313,6 +324,14 @@ impl DumpIR for Stmt {
                 insert_instructions(program, context, [lval_value, store_inst]);
                 Ok(ConstOrValue::Const(0))
             }
+            Stmt::ExpStmt(e) => {
+                if let Some(exp) = e {
+                    exp.dump_ir(program, context)
+                } else {
+                    Ok(ConstOrValue::Const(0))
+                }
+            }
+            Stmt::BlockStmt(b) => b.dump_ir(program, context),
         }
     }
 }
@@ -365,7 +384,7 @@ impl DumpIR for PrimaryExp {
         match self {
             PrimaryExp::ParenExp(exp) => exp.dump_ir(program, context),
             PrimaryExp::Number(n) => n.dump_ir(program, context),
-            PrimaryExp::LVal(lval) => match context.symbol_table.get(&lval.ident.id) {
+            PrimaryExp::LVal(lval) => match context.symbol_tables.get(&lval.ident.id) {
                 Some(SymbolTableEntry::Constant(_, _)) => lval.dump_ir(program, context),
                 Some(SymbolTableEntry::Variable(_, _)) => {
                     let res = lval.dump_ir(program, context)?;
@@ -391,7 +410,7 @@ impl DumpIR for LVal {
         _program: &mut Program,
         context: &mut IRContext,
     ) -> Result<ConstOrValue, String> {
-        match context.symbol_table.get(&self.ident.id) {
+        match context.symbol_tables.get(&self.ident.id) {
             Some(SymbolTableEntry::Variable(_tk, val)) => Ok(ConstOrValue::Value(*val)),
             Some(SymbolTableEntry::Constant(_tk, val)) => Ok(ConstOrValue::Const(val[0])),
             None => Err(format!("Variable {} not found", self.ident.id)),

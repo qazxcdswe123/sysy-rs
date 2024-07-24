@@ -75,7 +75,9 @@ ConstDecl: ConstDecl = "const" <btype: BType> <const_def: ConstDef> <defs: ("," 
 
 Stmt: Stmt = {
   <lval: LVal> "=" <exp: Exp> ";" => Stmt::AssignStmt(lval, exp),
-  "return" <exp: Exp> ";" => Stmt::ReturnStmt(<>),
+  <exp: (Exp)?> ";" => Stmt::ExpStmt(<>),
+  <b: Block> => Stmt::BlockStmt(b),
+  "return" <exp: (Exp)?> ";" => Stmt::ReturnStmt(<>),
 };
 
 Exp: Exp = {

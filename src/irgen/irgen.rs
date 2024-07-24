@@ -5,7 +5,7 @@ use koopa::ir::{
 
 use crate::ast::*;
 
-use super::{new_value, IRContext};
+use super::{IRContext, SymbolTableEntry};
 
 fn build_binary_expression(
     first_exp: &dyn DumpIR,
@@ -14,25 +14,40 @@ fn build_binary_expression(
     context: &mut IRContext,
     op: BinaryOp,
 ) -> Result<(), String> {
+    let mut tmp1 = 0;
     first_exp.dump_ir(program, context)?;
-    let lhs = context.curr_value.unwrap();
+    let lhs = context.curr_value;
+    if let Some((tmp, _)) = context.tmp_const {
+        tmp1 = tmp;
+    }
     second_exp.dump_ir(program, context)?;
-    let rhs = context.curr_value.unwrap();
+    let rhs = context.curr_value;
+    if let Some((tmp2, _)) = context.tmp_const {
+        context.tmp_const = Some((tmp1, tmp2));
+    }
 
-    build_binary_expression_from_value(program, context, op, lhs, rhs)?;
+    build_binary_expression_from_values(program, context, op, lhs, rhs)?;
 
     Ok(())
 }
 
-fn build_binary_expression_from_value(
+/// Values may be none when calculating const.
+fn build_binary_expression_from_values(
     program: &mut Program,
     context: &mut IRContext,
     op: BinaryOp,
-    lhs: koopa::ir::Value,
-    rhs: koopa::ir::Value,
+    lhs: Option<koopa::ir::Value>,
+    rhs: Option<koopa::ir::Value>,
 ) -> Result<(), String> {
+    if let Some((tmp1, tmp2)) = context.tmp_const {
+        const_propogation(op, context, tmp1, tmp2);
+        return Ok(());
+    }
     let curr_func_data = program.func_mut(context.curr_func.unwrap());
-    let new_value = curr_func_data.dfg_mut().new_value().binary(op, lhs, rhs);
+    let new_value = curr_func_data
+        .dfg_mut()
+        .new_value()
+        .binary(op, lhs.unwrap(), rhs.unwrap());
     curr_func_data
         .layout_mut()
         .bb_mut(context.curr_block.unwrap())
@@ -40,6 +55,28 @@ fn build_binary_expression_from_value(
         .extend([new_value]);
     context.curr_value = Some(new_value);
     Ok(())
+}
+
+fn const_propogation(op: BinaryOp, context: &mut IRContext, tmp1: i32, tmp2: i32) {
+    match op {
+        BinaryOp::NotEq => context.tmp_const = Some(((tmp1 != tmp2) as i32, 0)),
+        BinaryOp::Eq => context.tmp_const = Some(((tmp1 == tmp2) as i32, 0)),
+        BinaryOp::Gt => context.tmp_const = Some(((tmp1 > tmp2) as i32, 0)),
+        BinaryOp::Lt => context.tmp_const = Some(((tmp1 < tmp2) as i32, 0)),
+        BinaryOp::Ge => context.tmp_const = Some(((tmp1 >= tmp2) as i32, 0)),
+        BinaryOp::Le => context.tmp_const = Some(((tmp1 <= tmp2) as i32, 0)),
+        BinaryOp::Add => context.tmp_const = Some((tmp1 + tmp2, 0)),
+        BinaryOp::Sub => context.tmp_const = Some((tmp1 - tmp2, 0)),
+        BinaryOp::Mul => context.tmp_const = Some((tmp1 * tmp2, 0)),
+        BinaryOp::Div => context.tmp_const = Some((tmp1 / tmp2, 0)),
+        BinaryOp::Mod => context.tmp_const = Some((tmp1 % tmp2, 0)),
+        BinaryOp::And => context.tmp_const = Some((tmp1 & tmp2, 0)),
+        BinaryOp::Or => context.tmp_const = Some((tmp1 | tmp2, 0)),
+        BinaryOp::Xor => context.tmp_const = Some((tmp1 ^ tmp2, 0)),
+        BinaryOp::Shl => context.tmp_const = Some((tmp1 << tmp2, 0)),
+        BinaryOp::Sar => context.tmp_const = Some((tmp1 >> tmp2, 0)),
+        BinaryOp::Shr => unreachable!(),
+    }
 }
 
 pub trait DumpIR {
@@ -75,7 +112,6 @@ impl DumpIR for FuncDef {
 
 impl DumpIR for Block {
     fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<(), String> {
-        // self.stmt.dump_ir(program, context)?;
         for ele in &self.items {
             ele.dump_ir(program, context)?;
         }
@@ -86,9 +122,11 @@ impl DumpIR for Block {
 impl DumpIR for BlockItem {
     fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<(), String> {
         match self {
-            BlockItem::Decl(decl) => decl.dump_ir(program, context),
-            BlockItem::Stmt(stmt) => stmt.dump_ir(program, context),
+            BlockItem::Decl(decl) => decl.dump_ir(program, context)?,
+            BlockItem::Stmt(stmt) => stmt.dump_ir(program, context)?,
         }
+        context.curr_value = None;
+        Ok(())
     }
 }
 
@@ -106,19 +144,49 @@ impl DumpIR for VarDecl {
         let btype = &self.btype;
         for var_def in &self.var_defs {
             match var_def {
-                VarDef::WithoutInit(ident) => {
-                    let value = new_value(program, context).alloc(Type::get(btype.ty.clone()));
-                    program
-                        .func_mut(context.curr_func.unwrap())
+                VarDef::WithoutInitVal(ident) => {
+                    let curr_func = program.func_mut(context.curr_func.unwrap());
+
+                    let val = curr_func
                         .dfg_mut()
-                        .set_value_name(value, Some(format!("@{}", ident.id)));
+                        .new_value()
+                        .alloc(Type::get(btype.ty.clone()));
+                    context.symbol_table.insert(
+                        ident.id.clone(),
+                        SymbolTableEntry::Variable(btype.ty.clone(), val),
+                    );
+
+                    curr_func
+                        .layout_mut()
+                        .bb_mut(context.curr_block.unwrap())
+                        .insts_mut()
+                        .extend([val])
                 }
                 VarDef::WithInitVal(ident, rhs) => {
-                    let right_value = rhs.dump_ir(program, context)?;
+                    rhs.dump_ir(program, context)?;
+                    let rhs_value = context.curr_value.unwrap();
+                    let curr_func_data = program.func_mut(context.curr_func.unwrap());
+                    let val = curr_func_data
+                        .dfg_mut()
+                        .new_value()
+                        .alloc(Type::get(btype.ty.clone()));
+                    curr_func_data
+                        .dfg_mut()
+                        .set_value_name(val, Some(format!("@{}", ident.id)));
+                    let store = curr_func_data.dfg_mut().new_value().store(rhs_value, val);
+                    context.symbol_table.insert(
+                        ident.id.clone(),
+                        SymbolTableEntry::Variable(btype.ty.clone(), val),
+                    );
+                    curr_func_data
+                        .layout_mut()
+                        .bb_mut(context.curr_block.unwrap())
+                        .insts_mut()
+                        .extend([val, store]);
                 }
             }
         }
-        todo!()
+        Ok(())
     }
 }
 
@@ -131,11 +199,18 @@ impl DumpIR for InitVal {
 
 impl DumpIR for ConstDecl {
     fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<(), String> {
-        let ty = &self.btype;
-        for d in &self.const_defs {
-            let result = d.const_init_val.dump_ir(program, context)?;
+        let ty = &self.btype.ty;
+        for const_def in &self.const_defs {
+            context.tmp_const = Some((0, 0));
+            const_def.const_init_val.dump_ir(program, context)?;
+            let (c, _) = context.tmp_const.unwrap();
+            context.tmp_const = None;
+            context.symbol_table.insert(
+                const_def.ident.id.clone(),
+                SymbolTableEntry::Constant(ty.clone(), vec![c]),
+            );
         }
-        todo!()
+        Ok(())
     }
 }
 
@@ -168,7 +243,26 @@ impl DumpIR for Stmt {
 
                 Ok(())
             }
-            Stmt::AssignStmt(_, _) => todo!(),
+            Stmt::AssignStmt(lval, rhs_exp) => {
+                lval.dump_ir(program, context)?;
+                let lval_value = context.curr_value.unwrap();
+                rhs_exp.dump_ir(program, context)?;
+                let rhs_value = context.curr_value.unwrap();
+
+                let curr_func_data = program.func_mut(context.curr_func.unwrap());
+                let assign_stmt = curr_func_data
+                    .dfg_mut()
+                    .new_value()
+                    .store(rhs_value, lval_value);
+
+                curr_func_data
+                    .layout_mut()
+                    .bb_mut(context.curr_block.unwrap())
+                    .insts_mut()
+                    .extend([assign_stmt]);
+
+                Ok(())
+            }
         }
     }
 }
@@ -209,14 +303,53 @@ impl DumpIR for PrimaryExp {
         match self {
             PrimaryExp::ParenExp(exp) => exp.dump_ir(program, context),
             PrimaryExp::Number(n) => n.dump_ir(program, context),
-            PrimaryExp::LVal(lval) => lval.dump_ir(program, context),
+            PrimaryExp::LVal(lval) => match context.symbol_table.get(&lval.ident.id) {
+                Some(SymbolTableEntry::Constant(_, _)) => lval.dump_ir(program, context),
+                Some(SymbolTableEntry::Variable(_, _)) => {
+                    lval.dump_ir(program, context)?;
+                    let val = context.curr_value.unwrap();
+                    let curr_func_data = program.func_mut(context.curr_func.unwrap());
+                    let load = curr_func_data.dfg_mut().new_value().load(val);
+                    context.curr_value = Some(load);
+                    curr_func_data
+                        .layout_mut()
+                        .bb_mut(context.curr_block.unwrap())
+                        .insts_mut()
+                        .extend([load]);
+                    Ok(())
+                }
+                None => Err(format!("Variable {} not found", lval.ident.id)),
+            },
         }
     }
 }
 
 impl DumpIR for LVal {
     fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<(), String> {
-        todo!()
+        match context.symbol_table.get(&self.ident.id) {
+            Some(SymbolTableEntry::Variable(_tk, val)) => {
+                if let Some(_) = context.tmp_const {
+                    return Err("Constant not finished yet".to_string());
+                }
+                context.curr_value = Some(*val);
+                Ok(())
+            }
+            Some(SymbolTableEntry::Constant(_tk, val)) => {
+                if let Some(_) = context.tmp_const {
+                    context.tmp_const = Some((val[0], 0));
+                    return Ok(());
+                }
+                context.curr_value = Some(
+                    program
+                        .func_mut(context.curr_func.unwrap())
+                        .dfg_mut()
+                        .new_value()
+                        .integer(val[0]),
+                );
+                Ok(())
+            }
+            None => Err(format!("Variable {} not found", self.ident.id)),
+        }
     }
 }
 
@@ -257,7 +390,12 @@ impl DumpIR for LOrExp {
             LOrExp::LAndExp(l) => l.dump_ir(program, context),
             LOrExp::BinaryLOrExp(lhs, rhs) => {
                 build_binary_expression(&**lhs, rhs, program, context, BinaryOp::NotEq)?;
-                let left_bool = context.curr_value.unwrap();
+                let mut tmp1 = 0;
+                if let Some((tmp, _)) = context.tmp_const {
+                    tmp1 = tmp;
+                }
+                let left_bool = context.curr_value;
+
                 build_binary_expression(
                     &Number::IntConst(0),
                     rhs,
@@ -265,8 +403,12 @@ impl DumpIR for LOrExp {
                     context,
                     BinaryOp::NotEq,
                 )?;
-                let right_bool = context.curr_value.unwrap();
-                build_binary_expression_from_value(
+                if let Some((tmp2, _)) = context.tmp_const {
+                    context.tmp_const = Some((tmp1, tmp2));
+                }
+                let right_bool = context.curr_value;
+
+                build_binary_expression_from_values(
                     program,
                     context,
                     BinaryOp::Or,
@@ -284,7 +426,12 @@ impl DumpIR for LAndExp {
             LAndExp::EqExp(e) => e.dump_ir(program, context),
             LAndExp::BinaryLAndExp(lhs, rhs) => {
                 build_binary_expression(&**lhs, rhs, program, context, BinaryOp::NotEq)?;
-                let left_bool = context.curr_value.unwrap();
+                let mut tmp1 = 0;
+                if let Some((tmp, _)) = context.tmp_const {
+                    tmp1 = tmp;
+                }
+                let left_bool = context.curr_value;
+
                 build_binary_expression(
                     &Number::IntConst(0),
                     rhs,
@@ -292,8 +439,12 @@ impl DumpIR for LAndExp {
                     context,
                     BinaryOp::NotEq,
                 )?;
-                let right_bool = context.curr_value.unwrap();
-                build_binary_expression_from_value(
+                let right_bool = context.curr_value;
+                if let Some((tmp2, _)) = context.tmp_const {
+                    context.tmp_const = Some((tmp1, tmp2));
+                }
+
+                build_binary_expression_from_values(
                     program,
                     context,
                     BinaryOp::And,
@@ -343,6 +494,11 @@ impl DumpIR for Number {
     fn dump_ir(&self, program: &mut Program, context: &mut IRContext) -> Result<(), String> {
         match self {
             Number::IntConst(i) => {
+                if let Some(_) = context.tmp_const {
+                    context.tmp_const = Some((*i, 0));
+                    return Ok(());
+                }
+
                 let curr_func_data = program.func_mut(context.curr_func.unwrap());
                 let new_value = curr_func_data.dfg_mut().new_value().integer(*i);
                 context.curr_value = Some(new_value);

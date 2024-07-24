@@ -68,7 +68,7 @@ pub struct VarDecl {
 }
 
 pub enum VarDef {
-    WithoutInit(IDENT),
+    WithoutInitVal(IDENT),
     WithInitVal(IDENT, InitVal),
 }
 

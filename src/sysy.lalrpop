@@ -50,7 +50,7 @@ VarDecl: VarDecl = <btype: BType> <var_def: VarDef> <defs: ("," <VarDef>)*> ";" 
 };
 
 VarDef: VarDef = {
-  <ident: IDENT> => VarDef::WithoutInit(<>),
+  <ident: IDENT> => VarDef::WithoutInitVal(<>),
   <ident: IDENT> "=" <init: InitVal> => VarDef::WithInitVal(ident, init),
 }
 

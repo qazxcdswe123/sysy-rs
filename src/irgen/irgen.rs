@@ -5,7 +5,10 @@ use koopa::ir::{
 
 use crate::ast::*;
 
-use super::{insert_instructions, new_value, ConstOrValue, DumpIR, IRContext, SymbolTableEntry};
+use super::{
+    insert_instructions, new_value, DumpIR, DumpResult, ExpDumpIR, ExpDumpResult, IRContext,
+    SymbolTableEntry,
+};
 
 // fn build_binary_expression(
 //     first_exp: &dyn DumpIR,
@@ -33,29 +36,29 @@ use super::{insert_instructions, new_value, ConstOrValue, DumpIR, IRContext, Sym
 
 /// Values may be none when calculating const.
 fn build_binary_expression_from_results(
-    lhs: ConstOrValue,
-    rhs: ConstOrValue,
+    lhs: ExpDumpResult,
+    rhs: ExpDumpResult,
     program: &mut Program,
     context: &mut IRContext,
     op: BinaryOp,
-) -> Result<ConstOrValue, String> {
-    if let (ConstOrValue::Const(i1), ConstOrValue::Const(i2)) = (lhs, rhs) {
+) -> Result<ExpDumpResult, String> {
+    if let (ExpDumpResult::Const(i1), ExpDumpResult::Const(i2)) = (lhs, rhs) {
         let const_res = const_propogation(op, i1, i2);
-        return Ok(ConstOrValue::Const(const_res));
+        return Ok(ExpDumpResult::Const(const_res));
     }
 
     let val1 = match lhs {
-        ConstOrValue::Const(c) => new_value(program, context).integer(c),
-        ConstOrValue::Value(v) => v,
+        ExpDumpResult::Const(c) => new_value(program, context).integer(c),
+        ExpDumpResult::Value(v) => v,
     };
     let val2 = match rhs {
-        ConstOrValue::Const(c) => new_value(program, context).integer(c),
-        ConstOrValue::Value(v) => v,
+        ExpDumpResult::Const(c) => new_value(program, context).integer(c),
+        ExpDumpResult::Value(v) => v,
     };
 
     let new_value = new_value(program, context).binary(op, val1, val2);
     insert_instructions(program, context, [new_value]);
-    Ok(ConstOrValue::Value(new_value))
+    Ok(ExpDumpResult::Value(new_value))
 }
 
 fn const_propogation(op: BinaryOp, int1: i32, int2: i32) -> i32 {
@@ -85,7 +88,7 @@ impl DumpIR for CompUnit {
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<DumpResult, String> {
         self.func_def.dump_ir(program, context)
     }
 }
@@ -95,7 +98,7 @@ impl DumpIR for FuncDef {
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<DumpResult, String> {
         let ret_ty = self.func_type.ty.clone();
         let func = program.new_func(FunctionData::with_param_names(
             format!("@{}", self.ident.id),
@@ -119,13 +122,13 @@ impl DumpIR for Block {
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
-        let mut block_res = ConstOrValue::Const(0);
+    ) -> Result<DumpResult, String> {
+        let mut block_res = DumpResult::Ok;
         context.symbol_tables.new_table();
         for item in &self.items {
             let res = item.dump_ir(program, context)?;
             // return in block
-            if let ConstOrValue::Const(-1) = res {
+            if let DumpResult::Abort = res {
                 block_res = res;
                 break;
             }
@@ -140,7 +143,7 @@ impl DumpIR for BlockItem {
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<DumpResult, String> {
         match self {
             BlockItem::Decl(decl) => decl.dump_ir(program, context),
             BlockItem::Stmt(stmt) => stmt.dump_ir(program, context),
@@ -153,7 +156,7 @@ impl DumpIR for Decl {
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<DumpResult, String> {
         match self {
             Decl::ConstDecl(const_decl) => const_decl.dump_ir(program, context),
             Decl::VarDecl(var_decl) => var_decl.dump_ir(program, context),
@@ -166,7 +169,7 @@ impl DumpIR for VarDecl {
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<DumpResult, String> {
         let btype = &self.btype;
         for var_def in &self.var_defs {
             match var_def {
@@ -195,8 +198,8 @@ impl DumpIR for VarDecl {
                 VarDef::WithInitVal(ident, rhs) => {
                     let res = rhs.dump_ir(program, context)?;
                     let rhs_value = match res {
-                        ConstOrValue::Const(c) => new_value(program, context).integer(c),
-                        ConstOrValue::Value(v) => v,
+                        ExpDumpResult::Const(c) => new_value(program, context).integer(c),
+                        ExpDumpResult::Value(v) => v,
                     };
                     let curr_func_data = program.func_mut(context.curr_func.unwrap());
                     let val = curr_func_data
@@ -220,16 +223,16 @@ impl DumpIR for VarDecl {
                 }
             }
         }
-        Ok(ConstOrValue::Const(0))
+        Ok(DumpResult::Ok)
     }
 }
 
-impl DumpIR for InitVal {
+impl ExpDumpIR for InitVal {
     fn dump_ir(
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<ExpDumpResult, String> {
         let InitVal::Exp(exp) = self;
         exp.dump_ir(program, context)
     }
@@ -240,18 +243,18 @@ impl DumpIR for ConstDecl {
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<DumpResult, String> {
         let ty = &self.btype.ty;
         for const_def in &self.const_defs {
             let res = const_def.const_init_val.dump_ir(program, context)?;
             match res {
-                ConstOrValue::Const(c) => {
+                ExpDumpResult::Const(c) => {
                     context.symbol_tables.insert(
                         const_def.ident.id.clone(),
                         SymbolTableEntry::Constant(ty.clone(), vec![c]),
                     );
                 }
-                ConstOrValue::Value(_) => {
+                ExpDumpResult::Value(_) => {
                     return Err(format!(
                         "Const {} is not a constant expression",
                         const_def.ident.id,
@@ -259,27 +262,27 @@ impl DumpIR for ConstDecl {
                 }
             }
         }
-        Ok(ConstOrValue::Const(0))
+        Ok(DumpResult::Ok)
     }
 }
 
-impl DumpIR for ConstInitVal {
+impl ExpDumpIR for ConstInitVal {
     fn dump_ir(
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<ExpDumpResult, String> {
         let ConstInitVal::ConstExp(exp) = self;
         exp.dump_ir(program, context)
     }
 }
 
-impl DumpIR for ConstExp {
+impl ExpDumpIR for ConstExp {
     fn dump_ir(
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<ExpDumpResult, String> {
         self.exp.dump_ir(program, context)
     }
 }
@@ -289,46 +292,47 @@ impl DumpIR for Stmt {
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<DumpResult, String> {
         match self {
             Stmt::ReturnStmt(ret_exp) => {
                 let res = match ret_exp {
                     Some(exp) => Some({
                         let res = exp.dump_ir(program, context)?;
                         match res {
-                            ConstOrValue::Const(c) => new_value(program, context).integer(c),
-                            ConstOrValue::Value(v) => v,
+                            ExpDumpResult::Const(c) => new_value(program, context).integer(c),
+                            ExpDumpResult::Value(v) => v,
                         }
                     }),
                     None => None,
                 };
                 let ret_stmt = new_value(program, context).ret(res);
                 insert_instructions(program, context, [ret_stmt]);
-                Ok(ConstOrValue::Const(-1))
+                Ok(DumpResult::Abort)
             }
             Stmt::AssignStmt(lval, rhs_exp) => {
                 let res1 = lval.dump_ir(program, context)?;
                 let lval_value = match res1 {
-                    ConstOrValue::Const(_) => {
+                    ExpDumpResult::Const(_) => {
                         return Err("LVal is should not be const".to_string());
                     }
-                    ConstOrValue::Value(v) => v,
+                    ExpDumpResult::Value(v) => v,
                 };
                 let res2 = rhs_exp.dump_ir(program, context)?;
                 let rhs_value = match res2 {
-                    ConstOrValue::Const(c) => new_value(program, context).integer(c),
-                    ConstOrValue::Value(v) => v,
+                    ExpDumpResult::Const(c) => new_value(program, context).integer(c),
+                    ExpDumpResult::Value(v) => v,
                 };
 
                 let store_inst = new_value(program, context).store(rhs_value, lval_value);
                 insert_instructions(program, context, [lval_value, store_inst]);
-                Ok(ConstOrValue::Const(0))
+                Ok(DumpResult::Ok)
             }
             Stmt::ExpStmt(e) => {
                 if let Some(exp) = e {
-                    exp.dump_ir(program, context)
+                    exp.dump_ir(program, context)?;
+                    Ok(DumpResult::Ok)
                 } else {
-                    Ok(ConstOrValue::Const(0))
+                    Ok(DumpResult::Ok)
                 }
             }
             Stmt::BlockStmt(b) => b.dump_ir(program, context),
@@ -336,36 +340,36 @@ impl DumpIR for Stmt {
     }
 }
 
-impl DumpIR for Exp {
+impl ExpDumpIR for Exp {
     fn dump_ir(
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<ExpDumpResult, String> {
         match self {
             Exp::LOrExp(exp) => exp.dump_ir(program, context),
         }
     }
 }
 
-impl DumpIR for UnaryExp {
+impl ExpDumpIR for UnaryExp {
     fn dump_ir(
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<ExpDumpResult, String> {
         match self {
             UnaryExp::PrimaryExp(exp) => exp.dump_ir(program, context),
             UnaryExp::PlusUnaryExp(exp) => exp.dump_ir(program, context),
             UnaryExp::MinusUnaryExp(exp) => build_binary_expression_from_results(
-                ConstOrValue::Const(0),
+                ExpDumpResult::Const(0),
                 exp.dump_ir(program, context)?,
                 program,
                 context,
                 BinaryOp::Sub,
             ),
             UnaryExp::NotUnaryExp(exp) => build_binary_expression_from_results(
-                ConstOrValue::Const(0),
+                ExpDumpResult::Const(0),
                 exp.dump_ir(program, context)?,
                 program,
                 context,
@@ -375,12 +379,12 @@ impl DumpIR for UnaryExp {
     }
 }
 
-impl DumpIR for PrimaryExp {
+impl ExpDumpIR for PrimaryExp {
     fn dump_ir(
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<ExpDumpResult, String> {
         match self {
             PrimaryExp::ParenExp(exp) => exp.dump_ir(program, context),
             PrimaryExp::Number(n) => n.dump_ir(program, context),
@@ -389,12 +393,12 @@ impl DumpIR for PrimaryExp {
                 Some(SymbolTableEntry::Variable(_, _)) => {
                     let res = lval.dump_ir(program, context)?;
                     match res {
-                        ConstOrValue::Const(_) => Ok(res),
-                        ConstOrValue::Value(v) => {
+                        ExpDumpResult::Const(_) => Ok(res),
+                        ExpDumpResult::Value(v) => {
                             // load the value
                             let load_inst = new_value(program, context).load(v);
                             insert_instructions(program, context, [load_inst]);
-                            Ok(ConstOrValue::Value(load_inst))
+                            Ok(ExpDumpResult::Value(load_inst))
                         }
                     }
                 }
@@ -404,26 +408,26 @@ impl DumpIR for PrimaryExp {
     }
 }
 
-impl DumpIR for LVal {
+impl ExpDumpIR for LVal {
     fn dump_ir(
         &self,
         _program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<ExpDumpResult, String> {
         match context.symbol_tables.get(&self.ident.id) {
-            Some(SymbolTableEntry::Variable(_tk, val)) => Ok(ConstOrValue::Value(*val)),
-            Some(SymbolTableEntry::Constant(_tk, val)) => Ok(ConstOrValue::Const(val[0])),
+            Some(SymbolTableEntry::Variable(_tk, val)) => Ok(ExpDumpResult::Value(*val)),
+            Some(SymbolTableEntry::Constant(_tk, val)) => Ok(ExpDumpResult::Const(val[0])),
             None => Err(format!("Variable {} not found", self.ident.id)),
         }
     }
 }
 
-impl DumpIR for AddExp {
+impl ExpDumpIR for AddExp {
     fn dump_ir(
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<ExpDumpResult, String> {
         match self {
             AddExp::MulExp(m) => m.dump_ir(program, context),
             AddExp::BinaryAddExp(lhs, rhs) => build_binary_expression_from_results(
@@ -444,12 +448,12 @@ impl DumpIR for AddExp {
     }
 }
 
-impl DumpIR for MulExp {
+impl ExpDumpIR for MulExp {
     fn dump_ir(
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<ExpDumpResult, String> {
         match self {
             MulExp::UnaryExp(u) => u.dump_ir(program, context),
             MulExp::BinaryMulExp(lhs, rhs) => build_binary_expression_from_results(
@@ -477,24 +481,24 @@ impl DumpIR for MulExp {
     }
 }
 
-impl DumpIR for LOrExp {
+impl ExpDumpIR for LOrExp {
     fn dump_ir(
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<ExpDumpResult, String> {
         match self {
             LOrExp::LAndExp(l) => l.dump_ir(program, context),
             LOrExp::BinaryLOrExp(lhs, rhs) => {
                 let res1 = build_binary_expression_from_results(
                     lhs.dump_ir(program, context)?,
-                    ConstOrValue::Const(0),
+                    ExpDumpResult::Const(0),
                     program,
                     context,
                     BinaryOp::NotEq,
                 )?;
                 let res2 = build_binary_expression_from_results(
-                    ConstOrValue::Const(0),
+                    ExpDumpResult::Const(0),
                     rhs.dump_ir(program, context)?,
                     program,
                     context,
@@ -507,24 +511,24 @@ impl DumpIR for LOrExp {
     }
 }
 
-impl DumpIR for LAndExp {
+impl ExpDumpIR for LAndExp {
     fn dump_ir(
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<ExpDumpResult, String> {
         match self {
             LAndExp::EqExp(e) => e.dump_ir(program, context),
             LAndExp::BinaryLAndExp(lhs, rhs) => {
                 let res1 = build_binary_expression_from_results(
                     lhs.dump_ir(program, context)?,
-                    ConstOrValue::Const(0),
+                    ExpDumpResult::Const(0),
                     program,
                     context,
                     BinaryOp::NotEq,
                 )?;
                 let res2 = build_binary_expression_from_results(
-                    ConstOrValue::Const(0),
+                    ExpDumpResult::Const(0),
                     rhs.dump_ir(program, context)?,
                     program,
                     context,
@@ -537,12 +541,12 @@ impl DumpIR for LAndExp {
     }
 }
 
-impl DumpIR for EqExp {
+impl ExpDumpIR for EqExp {
     fn dump_ir(
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<ExpDumpResult, String> {
         match self {
             EqExp::RelExp(e) => e.dump_ir(program, context),
             EqExp::BinaryEqExp(lhs, rhs) => build_binary_expression_from_results(
@@ -563,12 +567,12 @@ impl DumpIR for EqExp {
     }
 }
 
-impl DumpIR for RelExp {
+impl ExpDumpIR for RelExp {
     fn dump_ir(
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<ExpDumpResult, String> {
         match self {
             RelExp::AddExp(exp) => exp.dump_ir(program, context),
             RelExp::BinaryLtExp(lhs, rhs) => build_binary_expression_from_results(
@@ -603,14 +607,14 @@ impl DumpIR for RelExp {
     }
 }
 
-impl DumpIR for Number {
+impl ExpDumpIR for Number {
     fn dump_ir(
         &self,
         _program: &mut Program,
         _context: &mut IRContext,
-    ) -> Result<ConstOrValue, String> {
+    ) -> Result<ExpDumpResult, String> {
         match self {
-            Number::IntConst(i) => Ok(ConstOrValue::Const(*i)),
+            Number::IntConst(i) => Ok(ExpDumpResult::Const(*i)),
         }
     }
 }

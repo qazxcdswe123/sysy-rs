@@ -10,12 +10,12 @@ use crate::ast::CompUnit;
 
 mod irgen;
 
-pub trait DumpIR {
+pub trait ExpDumpIR {
     fn dump_ir(
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ConstOrValue, String>;
+    ) -> Result<ExpDumpResult, String>;
 }
 
 pub fn generate_ir(comp_unit: &CompUnit) -> Result<Program, String> {
@@ -35,9 +35,19 @@ pub fn generate_ir(comp_unit: &CompUnit) -> Result<Program, String> {
 /// IR building result. If the expression is a constant expression, returns the i32 result.
 /// Otherwise, returns the Koopa IR Value.
 #[derive(Clone, Copy)]
-pub enum ConstOrValue {
+pub enum ExpDumpResult {
     Const(i32),
     Value(Value),
+}
+
+pub enum DumpResult {
+    Ok,
+    Abort,
+}
+
+pub trait DumpIR {
+    fn dump_ir(&self, program: &mut Program, context: &mut IRContext)
+        -> Result<DumpResult, String>;
 }
 
 pub struct IRContext {

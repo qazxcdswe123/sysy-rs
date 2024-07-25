@@ -70,9 +70,9 @@ pub struct VarDecl {
     pub var_defs: Vec<VarDef>,
 }
 
-pub enum VarDef {
-    WithoutInitVal(IDENT),
-    WithInitVal(IDENT, InitVal),
+pub struct VarDef {
+    pub ident: IDENT,
+    pub init: Option<InitVal>,
 }
 
 pub enum InitVal {

@@ -10,30 +10,6 @@ use super::{
     SymbolTableEntry,
 };
 
-// fn build_binary_expression(
-//     first_exp: &dyn DumpIR,
-//     second_exp: &dyn DumpIR,
-//     program: &mut Program,
-//     context: &mut IRContext,
-//     op: BinaryOp,
-// ) -> Result<ConstOrValue, String> {
-//     let mut tmp1 = 0;
-//     first_exp.dump_ir(program, context)?;
-//     let lhs = context.curr_value;
-//     if let Some((tmp, _)) = context.tmp_const {
-//         tmp1 = tmp;
-//     }
-//     second_exp.dump_ir(program, context)?;
-//     let rhs = context.curr_value;
-//     if let Some((tmp2, _)) = context.tmp_const {
-//         context.tmp_const = Some((tmp1, tmp2));
-//     }
-
-//     build_binary_expression_from_results(lhs, rhs, program, context, op)?;
-
-//     Ok(())
-// }
-
 /// Values may be none when calculating const.
 fn build_binary_expression_from_results(
     lhs: ExpDumpResult,
@@ -172,30 +148,8 @@ impl DumpIR for VarDecl {
     ) -> Result<DumpResult, String> {
         let btype = &self.btype;
         for var_def in &self.var_defs {
-            match var_def {
-                VarDef::WithoutInitVal(ident) => {
-                    let curr_func = program.func_mut(context.curr_func.unwrap());
-
-                    let val = curr_func
-                        .dfg_mut()
-                        .new_value()
-                        .alloc(Type::get(btype.ty.clone()));
-                    curr_func.dfg_mut().set_value_name(
-                        val,
-                        Some(format!("@{}_{}", ident.id, context.symbol_tables.depth())),
-                    );
-                    context.symbol_tables.insert(
-                        ident.id.clone(),
-                        SymbolTableEntry::Variable(btype.ty.clone(), val),
-                    );
-
-                    curr_func
-                        .layout_mut()
-                        .bb_mut(context.curr_block.unwrap())
-                        .insts_mut()
-                        .extend([val])
-                }
-                VarDef::WithInitVal(ident, rhs) => {
+            match &var_def.init {
+                Some(rhs) => {
                     let res = rhs.dump_ir(program, context)?;
                     let rhs_value = match res {
                         ExpDumpResult::Const(c) => new_value(program, context).integer(c),
@@ -208,11 +162,15 @@ impl DumpIR for VarDecl {
                         .alloc(Type::get(btype.ty.clone()));
                     curr_func_data.dfg_mut().set_value_name(
                         val,
-                        Some(format!("@{}_{}", ident.id, context.symbol_tables.depth())),
+                        Some(format!(
+                            "@{}_{}",
+                            var_def.ident.id,
+                            context.symbol_tables.depth()
+                        )),
                     );
                     let store = curr_func_data.dfg_mut().new_value().store(rhs_value, val);
                     context.symbol_tables.insert(
-                        ident.id.clone(),
+                        var_def.ident.id.clone(),
                         SymbolTableEntry::Variable(btype.ty.clone(), val),
                     );
                     curr_func_data
@@ -221,6 +179,26 @@ impl DumpIR for VarDecl {
                         .insts_mut()
                         .extend([val, store]);
                 }
+                None => {
+                    let val = new_value(program, context).alloc(Type::get(btype.ty.clone()));
+                    program
+                        .func_mut(context.curr_func.unwrap())
+                        .dfg_mut()
+                        .set_value_name(
+                            val,
+                            Some(format!(
+                                "@{}_{}",
+                                var_def.ident.id,
+                                context.symbol_tables.depth()
+                            )),
+                        );
+                    context.symbol_tables.insert(
+                        var_def.ident.id.clone(),
+                        SymbolTableEntry::Variable(btype.ty.clone(), val),
+                    );
+                    insert_instructions(program, context, [val]);
+                } // VarDef::WithInitVal(ident, rhs) => {
+                  // }
             }
         }
         Ok(DumpResult::Ok)

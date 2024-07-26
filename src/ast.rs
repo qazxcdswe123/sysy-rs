@@ -1,4 +1,4 @@
-//! CompUnit      ::= FuncDef;
+//! CompUnit      ::= [CompUnit] (Decl | FuncDef);
 //!
 //! Decl          ::= ConstDecl | VarDecl;
 //! ConstDecl     ::= "const" BType ConstDef {"," ConstDef} ";";
@@ -9,8 +9,10 @@
 //! VarDef        ::= IDENT | IDENT "=" InitVal;
 //! InitVal       ::= Exp;
 //!
-//! FuncDef       ::= FuncType IDENT "(" ")" Block;
-//! FuncType      ::= "int";
+//! FuncDef       ::= FuncType IDENT "(" [FuncFParams] ")" Block;
+//! FuncType      ::= "void" | "int";
+//! FuncFParams   ::= FuncFParam {"," FuncFParam};
+//! FuncFParam    ::= BType IDENT;
 //!
 //! Block         ::= "{" {BlockItem} "}";
 //! BlockItem     ::= Decl | Stmt;
@@ -27,8 +29,9 @@
 //! LVal          ::= IDENT;
 //! PrimaryExp    ::= "(" Exp ")" | LVal | Number;
 //! Number        ::= INT_CONST;
-//! UnaryExp      ::= PrimaryExp | UnaryOp UnaryExp;
+//! UnaryExp      ::= PrimaryExp | IDENT "(" [FuncRParams] ")" | UnaryOp UnaryExp;
 //! UnaryOp       ::= "+" | "-" | "!";
+//! FuncRParams   ::= Exp {"," Exp};
 //! MulExp        ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp;
 //! AddExp        ::= MulExp | AddExp ("+" | "-") MulExp;
 //! RelExp        ::= AddExp | RelExp ("<" | ">" | "<=" | ">=") AddExp;
@@ -51,6 +54,12 @@ pub struct FuncDef {
     pub func_type: BType,
     pub ident: IDENT,
     pub block: Block,
+    pub params: Vec<FuncFParam>,
+}
+
+pub struct FuncFParam {
+    pub btype: BType,
+    pub ident: IDENT,
 }
 
 pub struct BType {
@@ -136,6 +145,7 @@ pub enum UnaryExp {
     PlusUnaryExp(Box<UnaryExp>),
     MinusUnaryExp(Box<UnaryExp>),
     NotUnaryExp(Box<UnaryExp>),
+    FuncCall(IDENT, Vec<Exp>),
 }
 
 pub enum PrimaryExp {

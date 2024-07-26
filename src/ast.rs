@@ -1,42 +1,43 @@
-use koopa::ir::TypeKind;
+//! CompUnit      ::= FuncDef;
+//!
+//! Decl          ::= ConstDecl | VarDecl;
+//! ConstDecl     ::= "const" BType ConstDef {"," ConstDef} ";";
+//! BType         ::= "int";
+//! ConstDef      ::= IDENT "=" ConstInitVal;
+//! ConstInitVal  ::= ConstExp;
+//! VarDecl       ::= BType VarDef {"," VarDef} ";";
+//! VarDef        ::= IDENT | IDENT "=" InitVal;
+//! InitVal       ::= Exp;
+//!
+//! FuncDef       ::= FuncType IDENT "(" ")" Block;
+//! FuncType      ::= "int";
+//!
+//! Block         ::= "{" {BlockItem} "}";
+//! BlockItem     ::= Decl | Stmt;
+//! Stmt          ::= LVal "=" Exp ";"
+//!                 | [Exp] ";"
+//!                 | Block
+//!                 | "if" "(" Exp ")" Stmt ["else" Stmt]
+//!                 | "while" "(" Exp ")" Stmt
+//!                 | "break" ";"
+//!                 | "continue" ";"
+//!                 | "return" [Exp] ";";
+//!
+//! Exp           ::= LOrExp;
+//! LVal          ::= IDENT;
+//! PrimaryExp    ::= "(" Exp ")" | LVal | Number;
+//! Number        ::= INT_CONST;
+//! UnaryExp      ::= PrimaryExp | UnaryOp UnaryExp;
+//! UnaryOp       ::= "+" | "-" | "!";
+//! MulExp        ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp;
+//! AddExp        ::= MulExp | AddExp ("+" | "-") MulExp;
+//! RelExp        ::= AddExp | RelExp ("<" | ">" | "<=" | ">=") AddExp;
+//! EqExp         ::= RelExp | EqExp ("==" | "!=") RelExp;
+//! LAndExp       ::= EqExp | LAndExp "&&" EqExp;
+//! LOrExp        ::= LAndExp | LOrExp "||" LAndExp;
+//! ConstExp      ::= Exp;
 
-/// CompUnit  ::= FuncDef;
-///
-/// FuncDef   ::= FuncType IDENT "(" ")" Block;
-/// FuncType  ::= "int";
-///
-/// Block         ::= "{" {BlockItem} "}";
-/// BlockItem     ::= Decl | Stmt;
-/// Stmt ::= MatchedStmt
-///         | UnmatchedStmt
-/// UnMatchedStmt ::= "if" "(" Exp ")" MatchedStmt [ "else" MatchedStmt ]
-/// MatchedStmt ::= LVal "=" Exp ";"
-///         | "return" [ Exp ] ";"
-///         | Block;
-///         | [Exp] ";"
-///         | "if" "(" Exp ")" MatchedStmt "else" MatchedStmt
-///
-/// Exp         ::= LOrExp;
-/// PrimaryExp    ::= "(" Exp ")" | LVal | Number;
-/// ConstExp      ::= Exp;
-/// Number      ::= INT_CONST;
-/// LVal          ::= IDENT;
-/// UnaryExp    ::= PrimaryExp | UnaryOp UnaryExp;
-/// UnaryOp     ::= "+" | "-" | "!";
-/// MulExp      ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp;
-/// AddExp      ::= MulExp | AddExp ("+" | "-") MulExp;
-/// RelExp      ::= AddExp | RelExp ("<" | ">" | "<=" | ">=") AddExp;
-/// EqExp       ::= RelExp | EqExp ("==" | "!=") RelExp;
-/// LAndExp     ::= EqExp | LAndExp "&&" EqExp;
-/// LOrExp      ::= LAndExp | LOrExp "||" LAndExp;
-///
-/// Decl          ::= ConstDecl | VarDecl;
-/// ConstDecl     ::= "const" FuncType ConstDef {"," ConstDef} ";";
-/// VarDecl       ::= BType VarDef {"," VarDef} ";";
-/// VarDef        ::= IDENT | IDENT "=" InitVal;
-/// InitVal       ::= Exp;
-/// ConstDef      ::= IDENT "=" ConstInitVal;
-/// ConstInitVal  ::= ConstExp;
+use koopa::ir::TypeKind;
 
 pub struct CompUnit {
     pub func_def: FuncDef,

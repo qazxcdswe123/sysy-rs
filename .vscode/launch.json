@@ -1,0 +1,18 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "(OSX) Launch",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceRoot}/target/debug/mvll",
+            "args": [
+                "-koopa",
+                "hello.c",
+                "-o",
+                "hello.koopa"
+            ],
+            "cwd": "${workspaceRoot}",
+        }
+    ]
+}

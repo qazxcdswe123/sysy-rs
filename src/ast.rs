@@ -7,10 +7,15 @@ use koopa::ir::TypeKind;
 ///
 /// Block         ::= "{" {BlockItem} "}";
 /// BlockItem     ::= Decl | Stmt;
-/// Stmt          ::= LVal "=" Exp ";"
-///                 | [Exp] ";"
-///                 | Block
-///                 | "return" Exp ";";
+/// Stmt ::= MatchedStmt
+///         | UnmatchedStmt
+/// UnMatchedStmt ::= "if" "(" Exp ")" MatchedStmt [ "else" MatchedStmt ]
+/// MatchedStmt ::= LVal "=" Exp ";"
+///         | "return" [ Exp ] ";"
+///         | Block;
+///         | [Exp] ";"
+///         | "if" "(" Exp ")" MatchedStmt "else" MatchedStmt
+///
 /// Exp         ::= LOrExp;
 /// PrimaryExp    ::= "(" Exp ")" | LVal | Number;
 /// ConstExp      ::= Exp;
@@ -97,11 +102,25 @@ pub struct ConstExp {
     pub exp: Exp,
 }
 
-pub enum Stmt {
+pub enum BasicStmt {
     AssignStmt(LVal, Exp),
     ReturnStmt(Option<Exp>),
     ExpStmt(Option<Exp>),
     BlockStmt(Block),
+    IfElseStmt(Exp, Box<BasicStmt>, Box<Option<BasicStmt>>),
+}
+
+pub struct MatchedStmt {
+    pub stmt: BasicStmt,
+}
+
+pub struct UnmatchedStmt {
+    pub stmt: BasicStmt,
+}
+
+pub enum Stmt {
+    MatchedStmt(MatchedStmt),
+    UnmatchedStmt(UnmatchedStmt),
 }
 
 pub enum Exp {

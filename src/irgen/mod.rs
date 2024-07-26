@@ -24,8 +24,9 @@ pub fn generate_ir(comp_unit: &CompUnit) -> Result<Program, String> {
         curr_block: None,
         curr_func: None,
         symbol_tables: SymbolTables {
-            symbol_tables: vec![HashMap::new()],
+            symbol_tables: vec![],
         },
+        bb: 0,
     };
 
     comp_unit.dump_ir(&mut program, &mut context)?;
@@ -54,6 +55,7 @@ pub struct IRContext {
     curr_block: Option<BasicBlock>,
     curr_func: Option<Function>,
     symbol_tables: SymbolTables,
+    bb: u64,
 }
 
 pub struct SymbolTables {
@@ -109,4 +111,15 @@ where
         .bb_mut(context.curr_block.unwrap())
         .insts_mut()
         .extend(instructions);
+}
+
+fn insert_basic_blocks<T>(program: &mut Program, context: &mut IRContext, basic_blocks: T)
+where
+    T: IntoIterator<Item = BasicBlock>,
+{
+    program
+        .func_mut(context.curr_func.unwrap())
+        .layout_mut()
+        .bbs_mut()
+        .extend(basic_blocks);
 }

@@ -15,10 +15,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 解析命令行参数
     let mut args = args();
     args.next();
-    let mode = args.next().unwrap();
-    let input = args.next().unwrap();
+    let mode = args.next().expect("No mode specified");
+    let input = args.next().expect("No input file specified");
     args.next();
-    let output = args.next().unwrap();
+    let output = args.next().expect("No output file specified");
 
     // 读取输入文件
     let input = read_to_string(input)?;

@@ -6,8 +6,8 @@ use koopa::ir::{
 use crate::{ast::*, irgen::insert_basic_blocks};
 
 use super::{
-    insert_instructions, new_value, DumpIR, DumpResult, ExpDumpIR, ExpDumpResult, IRContext,
-    SymbolTableEntry,
+    insert_instructions, new_block, new_value, DumpIR, DumpResult, ExpDumpIR, ExpDumpResult,
+    IRContext, SymbolTableEntry,
 };
 
 /// Values may be none when calculating const.
@@ -404,6 +404,64 @@ impl DumpIR for BasicStmt {
                 context.curr_block = Some(if_block_end);
                 insert_basic_blocks(program, context, [if_block_end]);
 
+                Ok(DumpResult::Ok)
+            }
+            BasicStmt::WhileStmt(cond, stmt) => {
+                let while_block_start = new_block(program, context, "while_start");
+                let while_block_body = new_block(program, context, "while_body");
+                let while_block_end = new_block(program, context, "while_end");
+                insert_basic_blocks(
+                    program,
+                    context,
+                    [while_block_start, while_block_body, while_block_end],
+                );
+
+                let jmp_while_start_inst = new_value(program, context).jump(while_block_start);
+                insert_instructions(program, context, [jmp_while_start_inst]);
+
+                context.curr_block = Some(while_block_start);
+                let cond_val = match cond.dump_ir(program, context)? {
+                    ExpDumpResult::Const(c) => new_value(program, context).integer(c),
+                    ExpDumpResult::Value(v) => v,
+                };
+                let while_stmt =
+                    new_value(program, context).branch(cond_val, while_block_body, while_block_end);
+                insert_instructions(program, context, [while_stmt]);
+
+                context.curr_block = Some(while_block_body);
+                context.break_blocks.push(while_block_end);
+                context.continue_blocks.push(while_block_start);
+
+                match stmt.dump_ir(program, context)? {
+                    DumpResult::Ok => {
+                        let jmp_while_start_inst =
+                            new_value(program, context).jump(while_block_start);
+                        insert_instructions(program, context, [jmp_while_start_inst]);
+                    }
+                    DumpResult::Abort => {}
+                }
+
+                context.curr_block = Some(while_block_end);
+                context.break_blocks.pop();
+                context.continue_blocks.pop();
+                Ok(DumpResult::Ok)
+            }
+            BasicStmt::BreakStmt => {
+                let break_target = match context.break_blocks.last() {
+                    Some(b) => *b,
+                    None => return Err("Break statement outside loop".to_string()),
+                };
+                let break_inst = new_value(program, context).jump(break_target);
+                insert_instructions(program, context, [break_inst]);
+                Ok(DumpResult::Ok)
+            }
+            BasicStmt::ContinueStmt => {
+                let continue_target = match context.continue_blocks.last() {
+                    Some(b) => *b,
+                    None => return Err("Continue statement outside loop".to_string()),
+                };
+                let continue_inst = new_value(program, context).jump(continue_target);
+                insert_instructions(program, context, [continue_inst]);
                 Ok(DumpResult::Ok)
             }
         }

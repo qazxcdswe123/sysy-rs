@@ -109,6 +109,9 @@ pub enum BasicStmt {
     ExpStmt(Option<Exp>),
     BlockStmt(Block),
     IfElseStmt(Exp, Box<BasicStmt>, Box<Option<BasicStmt>>),
+    WhileStmt(Exp, Box<BasicStmt>),
+    BreakStmt,
+    ContinueStmt,
 }
 
 pub struct MatchedStmt {

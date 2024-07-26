@@ -81,6 +81,7 @@ UnmatchedStmt: UnmatchedStmt = {
   "if" "(" <exp: Exp> ")" <ms: MatchedStmt> => UnmatchedStmt{stmt: BasicStmt::IfElseStmt(exp, Box::new(ms.stmt), Box::new(None))}, 
   "if" "(" <exp: Exp> ")" <ums: UnmatchedStmt> => UnmatchedStmt{stmt: BasicStmt::IfElseStmt(exp, Box::new(ums.stmt), Box::new(None))}, 
   "if" "(" <exp: Exp> ")" <ms: MatchedStmt> "else" <ums: UnmatchedStmt> => UnmatchedStmt{stmt: BasicStmt::IfElseStmt(exp, Box::new(ms.stmt), Box::new(Some(ums.stmt)))}, 
+  "while" "(" <exp: Exp> ")" <us: UnmatchedStmt> => UnmatchedStmt{stmt: BasicStmt::WhileStmt(exp, Box::new(us.stmt))},
 }
 
 MatchedStmt: MatchedStmt = {
@@ -89,6 +90,9 @@ MatchedStmt: MatchedStmt = {
   <b: Block> => MatchedStmt{stmt: BasicStmt::BlockStmt(b)},
   "return" <exp: (Exp)?> ";" => MatchedStmt{stmt: BasicStmt::ReturnStmt(<>)},
   "if" "(" <exp: Exp> ")" <s1: MatchedStmt> "else" <s2: MatchedStmt> => MatchedStmt{stmt: BasicStmt::IfElseStmt(exp, Box::new(s1.stmt), Box::new(Some(s2.stmt)))},
+  "while" "(" <exp: Exp> ")" <s: MatchedStmt> => MatchedStmt{stmt: BasicStmt::WhileStmt(exp, Box::new(s.stmt))},
+  "continue" ";" => MatchedStmt{stmt: BasicStmt::ContinueStmt},
+  "break" ";" => MatchedStmt{stmt: BasicStmt::BreakStmt},
 };
 
 Exp: Exp = {

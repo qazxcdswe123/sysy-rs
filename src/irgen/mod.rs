@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use koopa::ir::{
-    builder::LocalBuilder,
+    builder::{BasicBlockBuilder, LocalBuilder},
     entities::{BasicBlock, Function},
     Program, TypeKind, Value,
 };
@@ -26,6 +26,8 @@ pub fn generate_ir(comp_unit: &CompUnit) -> Result<Program, String> {
         symbol_tables: SymbolTables {
             symbol_tables: vec![],
         },
+        break_blocks: vec![],
+        continue_blocks: vec![],
         bb: 0,
     };
 
@@ -55,6 +57,8 @@ pub struct IRContext {
     curr_block: Option<BasicBlock>,
     curr_func: Option<Function>,
     symbol_tables: SymbolTables,
+    break_blocks: Vec<BasicBlock>,
+    continue_blocks: Vec<BasicBlock>,
     bb: u64,
 }
 
@@ -122,4 +126,14 @@ where
         .layout_mut()
         .bbs_mut()
         .extend(basic_blocks);
+}
+
+fn new_block(program: &mut Program, context: &mut IRContext, name: &str) -> BasicBlock {
+    let blk = program
+        .func_mut(context.curr_func.unwrap())
+        .dfg_mut()
+        .new_bb()
+        .basic_block(Some(format!("%bb{}_{}", context.bb, name)));
+    context.bb += 1;
+    blk
 }

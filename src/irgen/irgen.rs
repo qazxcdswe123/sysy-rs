@@ -551,6 +551,12 @@ impl ExpDumpIR for MulExp {
     }
 }
 
+/*
+   int result = 1;
+   if (lhs == 0) {
+       result = rhs!=0;
+   }
+*/
 impl ExpDumpIR for LOrExp {
     fn dump_ir(
         &self,
@@ -631,6 +637,12 @@ impl ExpDumpIR for LOrExp {
     }
 }
 
+/*
+   int result = 0;
+   if (lhs != 0) {
+       result = rhs!=0;
+   }
+*/
 impl ExpDumpIR for LAndExp {
     fn dump_ir(
         &self,
@@ -673,9 +685,8 @@ impl ExpDumpIR for LAndExp {
                             .func_mut(context.curr_func.unwrap())
                             .dfg_mut()
                             .set_value_name(res_ptr, Some(format!("%LAnd_result")));
-                        let one = new_value(program, context).integer(1);
                         let zero = new_value(program, context).integer(0);
-                        let store = new_value(program, context).store(one, res_ptr);
+                        let store = new_value(program, context).store(zero, res_ptr);
                         let cond = new_value(program, context).binary(BinaryOp::Eq, v, zero);
                         let branch =
                             new_value(program, context).branch(cond, block_end, then_block);

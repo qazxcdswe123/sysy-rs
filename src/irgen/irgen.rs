@@ -453,7 +453,7 @@ impl DumpIR for BasicStmt {
                 };
                 let break_inst = new_value(program, context).jump(break_target);
                 insert_instructions(program, context, [break_inst]);
-                Ok(DumpResult::Ok)
+                Ok(DumpResult::Abort)
             }
             BasicStmt::ContinueStmt => {
                 let continue_target = match context.continue_blocks.last() {
@@ -462,7 +462,7 @@ impl DumpIR for BasicStmt {
                 };
                 let continue_inst = new_value(program, context).jump(continue_target);
                 insert_instructions(program, context, [continue_inst]);
-                Ok(DumpResult::Ok)
+                Ok(DumpResult::Abort)
             }
         }
     }

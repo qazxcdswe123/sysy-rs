@@ -78,12 +78,9 @@ Stmt: Stmt = {
 }
 
 UnmatchedStmt: UnmatchedStmt = {
-  "if" "(" <exp: Exp> ")" <ms: MatchedStmt>
-    => UnmatchedStmt{stmt: BasicStmt::IfElseStmt(exp, Box::new(ms.stmt), Box::new(None))}, 
-  "if" "(" <exp: Exp> ")" <ums: UnmatchedStmt>
-    => UnmatchedStmt{stmt: BasicStmt::IfElseStmt(exp, Box::new(ums.stmt), Box::new(None))}, 
-  "if" "(" <exp: Exp> ")" <ms: MatchedStmt> "else" <ums: UnmatchedStmt> 
-    => UnmatchedStmt{stmt: BasicStmt::IfElseStmt(exp, Box::new(ms.stmt), Box::new(Some(ums.stmt)))}, 
+  "if" "(" <exp: Exp> ")" <ms: MatchedStmt> => UnmatchedStmt{stmt: BasicStmt::IfElseStmt(exp, Box::new(ms.stmt), Box::new(None))}, 
+  "if" "(" <exp: Exp> ")" <ums: UnmatchedStmt> => UnmatchedStmt{stmt: BasicStmt::IfElseStmt(exp, Box::new(ums.stmt), Box::new(None))}, 
+  "if" "(" <exp: Exp> ")" <ms: MatchedStmt> "else" <ums: UnmatchedStmt> => UnmatchedStmt{stmt: BasicStmt::IfElseStmt(exp, Box::new(ms.stmt), Box::new(Some(ums.stmt)))}, 
 }
 
 MatchedStmt: MatchedStmt = {

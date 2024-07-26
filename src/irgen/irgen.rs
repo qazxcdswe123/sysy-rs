@@ -334,7 +334,7 @@ impl DumpIR for BasicStmt {
                 };
 
                 let store_inst = new_value(program, context).store(rhs_value, lval_dest);
-                insert_instructions(program, context, [lval_dest, store_inst]);
+                insert_instructions(program, context, [store_inst]);
                 Ok(DumpResult::Ok)
             }
             BasicStmt::ExpStmt(e) => {
@@ -626,15 +626,6 @@ impl ExpDumpIR for LOrExp {
                         Ok(ExpDumpResult::Value(load))
                     }
                 }
-                // let res2 = build_binary_expression_from_results(
-                //     ExpDumpResult::Const(0),
-                //     rhs.dump_ir(program, context)?,
-                //     program,
-                //     context,
-                //     BinaryOp::NotEq,
-                // )?;
-
-                // build_binary_expression_from_results(res1, res2, program, context, BinaryOp::Or)
             }
         }
     }

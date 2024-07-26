@@ -355,7 +355,7 @@ impl DumpIR for BasicStmt {
                     .func_mut(context.curr_func.unwrap())
                     .dfg_mut()
                     .new_bb()
-                    .basic_block(Some(format!("%bb{}_if_block_end", context.bb)));
+                    .basic_block(Some(format!("%if_block_end_bb{}", context.bb)));
                 context.bb += 1;
 
                 let if_block_start = context.curr_block.unwrap();
@@ -364,7 +364,7 @@ impl DumpIR for BasicStmt {
                     .func_mut(context.curr_func.unwrap())
                     .dfg_mut()
                     .new_bb()
-                    .basic_block(Some(format!("%bb{}_then", context.bb)));
+                    .basic_block(Some(format!("%then_bb{}", context.bb)));
                 context.bb += 1;
                 insert_basic_blocks(program, context, [then_block]);
                 context.curr_block = Some(then_block);
@@ -382,7 +382,7 @@ impl DumpIR for BasicStmt {
                             .func_mut(context.curr_func.unwrap())
                             .dfg_mut()
                             .new_bb()
-                            .basic_block(Some(format!("%bb{}_else", context.bb)));
+                            .basic_block(Some(format!("%else_bb{}", context.bb)));
                         context.bb += 1;
                         insert_basic_blocks(program, context, [else_block]);
                         context.curr_block = Some(else_block);
@@ -586,13 +586,13 @@ impl ExpDumpIR for LOrExp {
                             .func_mut(context.curr_func.unwrap())
                             .dfg_mut()
                             .new_bb()
-                            .basic_block(Some(format!("%bb{}_LOr_if_block_1", context.bb)));
+                            .basic_block(Some(format!("%LOr_if_block_1_bb{}", context.bb)));
                         context.bb += 1;
                         let block_end = program
                             .func_mut(context.curr_func.unwrap())
                             .dfg_mut()
                             .new_bb()
-                            .basic_block(Some(format!("%bb{}_LOr_block_end", context.bb)));
+                            .basic_block(Some(format!("%LOr_block_end_bb{}", context.bb)));
                         context.bb += 1;
                         insert_basic_blocks(program, context, [block1, block_end]);
 
@@ -672,12 +672,12 @@ impl ExpDumpIR for LAndExp {
                             .func_mut(context.curr_func.unwrap())
                             .dfg_mut()
                             .new_bb()
-                            .basic_block(Some(format!("%bb{}_LAnd_if_block_then", context.bb)));
+                            .basic_block(Some(format!("%LAnd_if_block_then_bb{}", context.bb)));
                         let block_end = program
                             .func_mut(context.curr_func.unwrap())
                             .dfg_mut()
                             .new_bb()
-                            .basic_block(Some(format!("%bb{}_LAnd_block_end", context.bb)));
+                            .basic_block(Some(format!("%LAnd_block_end_bb{}", context.bb)));
                         insert_basic_blocks(program, context, [then_block, block_end]);
 
                         let res_ptr = new_value(program, context).alloc(Type::get_i32());

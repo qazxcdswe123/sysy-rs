@@ -1,0 +1,3 @@
+[submodule "compiler-dev-test-cases"]
+	path = compiler-dev-test-cases
+	url = https://github.com/pku-minic/compiler-dev-test-cases

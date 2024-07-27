@@ -147,7 +147,6 @@ impl DumpIR for FuncDef {
         context.curr_block = Some(new_block);
         context.curr_func = Some(func);
 
-        // TODO: delete table
         context.symbol_tables.new_table();
         let parameter_count = program.func(context.curr_func.unwrap()).params().len();
         for idx in 0..parameter_count {
@@ -243,83 +242,56 @@ impl DumpIR for VarDecl {
     ) -> Result<DumpResult, String> {
         let btype = &self.btype;
         for var_def in &self.var_defs {
-            let final_var_ptr = match context.curr_func {
-                Some(func) => {
-                    // local function
-                    let var_ptr = new_value(program, context).alloc(Type::get(btype.ty.clone()));
-                    program.func_mut(func).dfg_mut().set_value_name(
-                        var_ptr,
-                        Some(format!(
-                            "@{}_{}",
-                            var_def.ident.id,
-                            context.symbol_tables.depth()
-                        )),
-                    );
-                    insert_instructions(program, context, [var_ptr]);
+            let final_var_ptr = if let Some(func) = context.curr_func {
+                // local function
+                let var_ptr = new_value(program, context).alloc(Type::get(btype.ty.clone()));
+                program.func_mut(func).dfg_mut().set_value_name(
+                    var_ptr,
+                    Some(format!(
+                        "@{}_{}",
+                        var_def.ident.id,
+                        context.symbol_tables.depth()
+                    )),
+                );
+                insert_instructions(program, context, [var_ptr]);
 
-                    if let Some(rhs) = &var_def.init {
-                        let res = rhs.dump_ir(program, context)?;
-                        let rhs_value = match res {
-                            ExpDumpResult::Const(c) => new_value(program, context).integer(c),
-                            ExpDumpResult::Value(v) => v,
-                        };
-
-                        let store_inst = new_value(program, context).store(rhs_value, var_ptr);
-                        insert_instructions(program, context, [store_inst]);
-                    }
-                    var_ptr
-                }
-                None => {
-                    // global
-                    let var_ptr = match &var_def.init {
-                        Some(rhs) => match rhs.dump_ir(program, context)? {
-                            ExpDumpResult::Const(c) => {
-                                let init = program.new_value().integer(c);
-                                program.new_value().global_alloc(init)
-                            }
-                            ExpDumpResult::Value(v) => program.new_value().global_alloc(v),
-                        },
-                        None => {
-                            let zero_init =
-                                program.new_value().zero_init(Type::get(btype.ty.clone()));
-                            program.new_value().global_alloc(zero_init)
-                        }
+                if let Some(rhs) = &var_def.init {
+                    let res = rhs.dump_ir(program, context)?;
+                    let rhs_value = match res {
+                        ExpDumpResult::Const(c) => new_value(program, context).integer(c),
+                        ExpDumpResult::Value(v) => v,
                     };
-                    program.set_value_name(
-                        var_ptr,
-                        Some(format!(
-                            "@{}_{}",
-                            var_def.ident.id,
-                            context.symbol_tables.depth()
-                        )),
-                    );
-                    var_ptr
+
+                    let store_inst = new_value(program, context).store(rhs_value, var_ptr);
+                    insert_instructions(program, context, [store_inst]);
                 }
+                var_ptr
+            } else {
+                // global
+                let var_ptr = match &var_def.init {
+                    Some(rhs) => match rhs.dump_ir(program, context)? {
+                        ExpDumpResult::Const(c) => {
+                            let init = program.new_value().integer(c);
+                            program.new_value().global_alloc(init)
+                        }
+                        ExpDumpResult::Value(v) => program.new_value().global_alloc(v),
+                    },
+                    None => {
+                        let zero_init = program.new_value().zero_init(Type::get(btype.ty.clone()));
+                        program.new_value().global_alloc(zero_init)
+                    }
+                };
+                program.set_value_name(
+                    var_ptr,
+                    Some(format!(
+                        "@{}_{}",
+                        var_def.ident.id,
+                        context.symbol_tables.depth()
+                    )),
+                );
+                var_ptr
             };
 
-            // match &var_def.init {
-            //     Some(rhs) => {
-            //         let dest = vardecl_common(program, context, btype, var_def);
-            //         let res = rhs.dump_ir(program, context)?;
-            //         let rhs_value = match res {
-            //             ExpDumpResult::Const(c) => new_value(program, context).integer(c),
-            //             ExpDumpResult::Value(v) => v,
-            //         };
-            //         let store_inst = new_value(program, context).store(rhs_value, dest);
-            //         insert_instructions(program, context, [store_inst]);
-            //         context.symbol_tables.insert(
-            //             var_def.ident.id.clone(),
-            //             SymbolTableEntry::Variable(btype.ty.clone(), dest),
-            //         );
-            //     }
-            //     None => {
-            //         let dest = vardecl_common(program, context, btype, var_def);
-            //         context.symbol_tables.insert(
-            //             var_def.ident.id.clone(),
-            //             SymbolTableEntry::Variable(btype.ty.clone(), dest),
-            //         )
-            //     }
-            // }
             context.symbol_tables.insert(
                 var_def.ident.id.clone(),
                 SymbolTableEntry::Variable(btype.ty.clone(), final_var_ptr),

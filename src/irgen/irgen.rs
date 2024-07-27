@@ -75,6 +75,7 @@ impl DumpIR for CompUnit {
            decl @starttime()
            decl @stoptime()
         */
+        context.symbol_tables.new_table();
         let stdlib = vec![
             ("getint", vec![], Type::get_i32()),
             ("getch", vec![], Type::get_i32()),

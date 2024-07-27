@@ -13,6 +13,7 @@
                 "hello.koopa"
             ],
             "cwd": "${workspaceRoot}",
+            "preLaunchTask": "cargo build"
         }
     ]
 }

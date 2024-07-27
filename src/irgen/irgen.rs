@@ -149,15 +149,18 @@ impl DumpIR for FuncDef {
 
         // TODO: delete table
         context.symbol_tables.new_table();
-        for idx in 0..program.func(context.curr_func.unwrap()).params().len() {
+        let parameter_count = program.func(context.curr_func.unwrap()).params().len();
+        for idx in 0..parameter_count {
             let param = &self.params[idx];
-            let curr_param = program.func(context.curr_func.unwrap()).params()[idx];
-            let param_value = new_value(program, context).alloc(Type::get(param.btype.ty.clone()));
+            // curr_param
+            let arguments = program.func(context.curr_func.unwrap()).params()[idx];
+            // param_value
+            let parameters = new_value(program, context).alloc(Type::get(param.btype.ty.clone()));
             program
                 .func_mut(context.curr_func.unwrap())
                 .dfg_mut()
                 .set_value_name(
-                    param_value,
+                    parameters,
                     Some(format!(
                         "%{}_{}param",
                         param.ident.id,
@@ -167,10 +170,10 @@ impl DumpIR for FuncDef {
 
             context.symbol_tables.insert(
                 param.ident.id.clone(),
-                SymbolTableEntry::Variable(param.btype.ty.clone(), param_value),
+                SymbolTableEntry::Variable(param.btype.ty.clone(), parameters),
             );
-            let assign_inst = new_value(program, context).store(param_value, curr_param);
-            insert_instructions(program, context, [param_value, assign_inst]);
+            let assign_inst = new_value(program, context).store(arguments, parameters);
+            insert_instructions(program, context, [parameters, assign_inst]);
         }
         match self.block.dump_ir(program, context)? {
             DumpResult::Ok => {

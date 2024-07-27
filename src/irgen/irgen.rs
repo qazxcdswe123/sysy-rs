@@ -75,6 +75,7 @@ impl DumpIR for CompUnit {
            decl @starttime()
            decl @stoptime()
         */
+        context.symbol_tables.new_table();
         let stdlib = vec![
             ("getint", vec![], Type::get_i32()),
             ("getch", vec![], Type::get_i32()),
@@ -174,12 +175,9 @@ impl DumpIR for FuncDef {
             let assign_inst = new_value(program, context).store(arguments, parameters);
             insert_instructions(program, context, [parameters, assign_inst]);
         }
-        match self.block.dump_ir(program, context)? {
-            DumpResult::Ok => {
-                let ret_inst = new_value(program, context).ret(None);
-                insert_instructions(program, context, [ret_inst]);
-            }
-            DumpResult::Abort => {}
+        if let DumpResult::Ok = self.block.dump_ir(program, context)? {
+            let ret_inst = new_value(program, context).ret(None);
+            insert_instructions(program, context, [ret_inst]);
         }
         context.curr_func = None;
         context.curr_block = None;
@@ -488,12 +486,9 @@ impl DumpIR for BasicStmt {
                 insert_basic_blocks(program, context, [then_block]);
                 context.curr_block = Some(then_block);
 
-                match s1.dump_ir(program, context)? {
-                    DumpResult::Ok => {
-                        let jmp_inst = new_value(program, context).jump(if_block_end);
-                        insert_instructions(program, context, [jmp_inst]);
-                    }
-                    DumpResult::Abort => {}
+                if let DumpResult::Ok = s1.dump_ir(program, context)? {
+                    let jmp_inst = new_value(program, context).jump(if_block_end);
+                    insert_instructions(program, context, [jmp_inst]);
                 }
                 let else_block = match &**option_s2 {
                     Some(stmt2) => {
@@ -505,12 +500,9 @@ impl DumpIR for BasicStmt {
                         context.bb += 1;
                         insert_basic_blocks(program, context, [else_block]);
                         context.curr_block = Some(else_block);
-                        match stmt2.dump_ir(program, context)? {
-                            DumpResult::Ok => {
-                                let jmp_inst = new_value(program, context).jump(if_block_end);
-                                insert_instructions(program, context, [jmp_inst]);
-                            }
-                            DumpResult::Abort => {}
+                        if let DumpResult::Ok = stmt2.dump_ir(program, context)? {
+                            let jmp_inst = new_value(program, context).jump(if_block_end);
+                            insert_instructions(program, context, [jmp_inst]);
                         }
                         else_block
                     }
@@ -551,13 +543,10 @@ impl DumpIR for BasicStmt {
                 context.break_blocks.push(while_block_end);
                 context.continue_blocks.push(while_block_start);
 
-                match stmt.dump_ir(program, context)? {
-                    DumpResult::Ok => {
-                        let jmp_while_start_inst =
-                            new_value(program, context).jump(while_block_start);
-                        insert_instructions(program, context, [jmp_while_start_inst]);
-                    }
-                    DumpResult::Abort => {}
+                if let DumpResult::Ok = stmt.dump_ir(program, context)? {
+                    let jmp_while_start_inst =
+                        new_value(program, context).jump(while_block_start);
+                    insert_instructions(program, context, [jmp_while_start_inst]);
                 }
 
                 context.curr_block = Some(while_block_end);

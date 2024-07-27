@@ -16,17 +16,46 @@ match {
   _
 }
 
-pub CompUnit: CompUnit = <func_def: FuncDef> => CompUnit { <> };
+pub CompUnit: CompUnit = <units: (Unit)*> => CompUnit { <> };
+
+pub Unit: Unit = {
+  <d: Decl> => Unit::Decl(<>),
+  <f: FuncDef> => Unit::FuncDef(<>),
+};
 
 FuncDef: FuncDef = {
-  <func_type: BType> <ident: IDENT> "(" ")" <block: Block> => {
-    FuncDef { <> }
+  <func_type: BType> <ident: IDENT> "(" <params: (FuncParams)?> ")" <block: Block> => {
+    // FuncDef { <> }
+    FuncDef { func_type, ident, params: params.unwrap_or(Vec::new()), block }
   }
-}
+};
+
+FuncFParam: FuncFParam = {
+  <btype: BType> <ident: IDENT> => FuncFParam { btype, ident }
+};
+
+FuncParams: Vec<FuncFParam> = <p: FuncFParam> <ps: ("," <FuncFParam>)*> => {
+  let mut vec = Vec::<FuncFParam>::new();
+  vec.push(p);
+  for p in ps {
+    vec.push(p);
+  }
+  vec
+};
+
+FuncRPrams: Vec<Exp> = <exp: Exp> <exps: ("," <Exp>)*> => {
+  let mut vec = Vec::<Exp>::new();
+  vec.push(exp);
+  for e in exps {
+    vec.push(e);
+  }
+  vec
+};
 
 BType: BType = {
   "int" => BType { ty: TypeKind::Int32 },
-}
+  "void" => BType { ty: TypeKind::Unit },
+};
 
 Block: Block = "{" <items: ( BlockItem )*> "}" => Block { <> };
 
@@ -38,7 +67,7 @@ BlockItem: BlockItem = {
 Decl: Decl = {
   <const_decl: ConstDecl> => Decl::ConstDecl(<>),
   <var_decl: VarDecl> => Decl::VarDecl(<>),
-}
+};
 
 VarDecl: VarDecl = <btype: BType> <var_def: VarDef> <defs: ("," <VarDef>)*> ";" => {
   let mut var_defs = Vec::<VarDef>::new();
@@ -75,14 +104,14 @@ ConstDecl: ConstDecl = "const" <btype: BType> <const_def: ConstDef> <defs: ("," 
 Stmt: Stmt = {
   <us: UnmatchedStmt> => Stmt::UnmatchedStmt(<>),
   <ms: MatchedStmt> => Stmt::MatchedStmt(<>),
-}
+};
 
 UnmatchedStmt: UnmatchedStmt = {
   "if" "(" <exp: Exp> ")" <ms: MatchedStmt> => UnmatchedStmt{stmt: BasicStmt::IfElseStmt(exp, Box::new(ms.stmt), Box::new(None))}, 
   "if" "(" <exp: Exp> ")" <ums: UnmatchedStmt> => UnmatchedStmt{stmt: BasicStmt::IfElseStmt(exp, Box::new(ums.stmt), Box::new(None))}, 
   "if" "(" <exp: Exp> ")" <ms: MatchedStmt> "else" <ums: UnmatchedStmt> => UnmatchedStmt{stmt: BasicStmt::IfElseStmt(exp, Box::new(ms.stmt), Box::new(Some(ums.stmt)))}, 
   "while" "(" <exp: Exp> ")" <us: UnmatchedStmt> => UnmatchedStmt{stmt: BasicStmt::WhileStmt(exp, Box::new(us.stmt))},
-}
+};
 
 MatchedStmt: MatchedStmt = {
   <lval: LVal> "=" <exp: Exp> ";" => MatchedStmt{stmt: BasicStmt::AssignStmt(lval, exp)},
@@ -112,6 +141,7 @@ UnaryExp: UnaryExp = {
   "+" <unary_exp: UnaryExp> => UnaryExp::PlusUnaryExp(Box::new(<>)),
   "-" <unary_exp: UnaryExp> => UnaryExp::MinusUnaryExp(Box::new(<>)),
   "!" <unary_exp: UnaryExp> => UnaryExp::NotUnaryExp(Box::new(<>)),
+  <i: IDENT> "(" <params: (FuncRPrams)?> ")" => UnaryExp::FuncCall(i, params.unwrap_or(Vec::new())),
 };
 
 AddExp: AddExp = {
@@ -153,7 +183,7 @@ RelExp: RelExp = {
 
 Number: Number = {
   <int_const: IntConst> => Number::IntConst(<>)
-}
+};
 
 // 如果匹配到标识符, 就返回这个字符串
 // 一对尖括号在此处指代的是正则表达式匹配到的字符串 (&str)
@@ -165,4 +195,4 @@ IntConst: i32 = {
   r"[1-9][0-9]*" => i32::from_str_radix(<>, 10).unwrap(),
   r"0[0-7]*" => i32::from_str_radix(<>, 8).unwrap(),
   r"0[xX][0-9a-fA-F]+" => i32::from_str_radix(&<>[2..], 16).unwrap(),
-}
+};

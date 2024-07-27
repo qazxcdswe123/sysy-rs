@@ -28,6 +28,7 @@ pub fn generate_ir(comp_unit: &CompUnit) -> Result<Program, String> {
         },
         break_blocks: vec![],
         continue_blocks: vec![],
+        function_table: HashMap::new(),
         bb: 0,
     };
 
@@ -59,6 +60,7 @@ pub struct IRContext {
     symbol_tables: SymbolTables,
     break_blocks: Vec<BasicBlock>,
     continue_blocks: Vec<BasicBlock>,
+    function_table: HashMap<String, Function>,
     bb: u64,
 }
 

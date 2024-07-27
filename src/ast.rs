@@ -43,7 +43,12 @@
 use koopa::ir::TypeKind;
 
 pub struct CompUnit {
-    pub func_def: FuncDef,
+    pub units: Vec<Unit>,
+}
+
+pub enum Unit {
+    Decl(Decl),
+    FuncDef(FuncDef),
 }
 
 pub struct IDENT {

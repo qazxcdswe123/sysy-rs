@@ -1,5 +1,5 @@
 use koopa::ir::{
-    builder::{BasicBlockBuilder, LocalInstBuilder, ValueBuilder},
+    builder::{BasicBlockBuilder, GlobalInstBuilder, LocalInstBuilder, ValueBuilder},
     BinaryOp, FunctionData, Program, Type,
 };
 
@@ -65,7 +65,57 @@ impl DumpIR for CompUnit {
         program: &mut Program,
         context: &mut IRContext,
     ) -> Result<DumpResult, String> {
-        self.func_def.dump_ir(program, context)
+        /*
+           decl @getint(): i32
+           decl @getch(): i32
+           decl @getarray(*i32): i32
+           decl @putint(i32)
+           decl @putch(i32)
+           decl @putarray(i32, *i32)
+           decl @starttime()
+           decl @stoptime()
+        */
+        let stdlib = vec![
+            ("getint", vec![], Type::get_i32()),
+            ("getch", vec![], Type::get_i32()),
+            (
+                "getarray",
+                vec![Type::get_pointer(Type::get_i32())],
+                Type::get_i32(),
+            ),
+            ("putint", vec![Type::get_i32()], Type::get_unit()),
+            ("putch", vec![Type::get_i32()], Type::get_unit()),
+            (
+                "putarray",
+                vec![Type::get_i32(), Type::get_pointer(Type::get_i32())],
+                Type::get_unit(),
+            ),
+            ("starttime", vec![], Type::get_unit()),
+            ("stoptime", vec![], Type::get_unit()),
+        ];
+        for (name, params_ty, ret_ty) in stdlib {
+            let func_data = FunctionData::new_decl(format!("@{}", name), params_ty, ret_ty);
+            let func = program.new_func(func_data);
+            context.function_table.insert(name.to_string(), func);
+        }
+
+        for unit in &self.units {
+            unit.dump_ir(program, context)?;
+        }
+        Ok(DumpResult::Ok)
+    }
+}
+
+impl DumpIR for Unit {
+    fn dump_ir(
+        &self,
+        program: &mut Program,
+        context: &mut IRContext,
+    ) -> Result<DumpResult, String> {
+        match self {
+            Unit::Decl(d) => d.dump_ir(program, context),
+            Unit::FuncDef(f) => f.dump_ir(program, context),
+        }
     }
 }
 
@@ -75,21 +125,57 @@ impl DumpIR for FuncDef {
         program: &mut Program,
         context: &mut IRContext,
     ) -> Result<DumpResult, String> {
-        let ret_ty = self.func_type.ty.clone();
+        let mut ir_params = Vec::<(Option<String>, Type)>::new();
+        for param in &self.params {
+            ir_params.push((
+                Some(format!("%{}_param", param.ident.id)),
+                Type::get(param.btype.ty.clone()),
+            ))
+        }
+        let func_ret_ty = self.func_type.ty.clone();
         let func = program.new_func(FunctionData::with_param_names(
             format!("@{}", self.ident.id),
-            vec![],
-            Type::get(ret_ty),
+            ir_params,
+            Type::get(func_ret_ty),
         ));
+
+        context.function_table.insert(self.ident.id.clone(), func);
+
         let func_data = program.func_mut(func);
         let new_block = func_data.dfg_mut().new_bb().basic_block(None);
         func_data.layout_mut().bbs_mut().extend([new_block]);
         context.curr_block = Some(new_block);
         context.curr_func = Some(func);
+
+        // TODO: delete table
+        context.symbol_tables.new_table();
+        for idx in 0..program.func(context.curr_func.unwrap()).params().len() {
+            let param = &self.params[idx];
+            let curr_param = program.func(context.curr_func.unwrap()).params()[idx];
+            let param_value = new_value(program, context).alloc(Type::get(param.btype.ty.clone()));
+            program
+                .func_mut(context.curr_func.unwrap())
+                .dfg_mut()
+                .set_value_name(
+                    param_value,
+                    Some(format!(
+                        "%{}_{}param",
+                        param.ident.id,
+                        context.symbol_tables.depth()
+                    )),
+                );
+
+            context.symbol_tables.insert(
+                param.ident.id.clone(),
+                SymbolTableEntry::Variable(param.btype.ty.clone(), param_value),
+            );
+            let assign_inst = new_value(program, context).store(param_value, curr_param);
+            insert_instructions(program, context, [param_value, assign_inst]);
+        }
         match self.block.dump_ir(program, context)? {
             DumpResult::Ok => {
-                let ret_stmt = new_value(program, context).ret(None);
-                insert_instructions(program, context, [ret_stmt]);
+                let ret_inst = new_value(program, context).ret(None);
+                insert_instructions(program, context, [ret_inst]);
             }
             DumpResult::Abort => {}
         }
@@ -154,55 +240,113 @@ impl DumpIR for VarDecl {
     ) -> Result<DumpResult, String> {
         let btype = &self.btype;
         for var_def in &self.var_defs {
-            match &var_def.init {
-                Some(rhs) => {
-                    let dest = vardecl_common(program, context, btype, var_def);
-                    let res = rhs.dump_ir(program, context)?;
-                    let rhs_value = match res {
-                        ExpDumpResult::Const(c) => new_value(program, context).integer(c),
-                        ExpDumpResult::Value(v) => v,
-                    };
-                    let store_inst = new_value(program, context).store(rhs_value, dest);
-                    insert_instructions(program, context, [store_inst]);
-                    context.symbol_tables.insert(
-                        var_def.ident.id.clone(),
-                        SymbolTableEntry::Variable(btype.ty.clone(), dest),
+            let final_var_ptr = match context.curr_func {
+                Some(func) => {
+                    // local function
+                    let var_ptr = new_value(program, context).alloc(Type::get(btype.ty.clone()));
+                    program.func_mut(func).dfg_mut().set_value_name(
+                        var_ptr,
+                        Some(format!(
+                            "@{}_{}",
+                            var_def.ident.id,
+                            context.symbol_tables.depth()
+                        )),
                     );
+                    insert_instructions(program, context, [var_ptr]);
+
+                    if let Some(rhs) = &var_def.init {
+                        let res = rhs.dump_ir(program, context)?;
+                        let rhs_value = match res {
+                            ExpDumpResult::Const(c) => new_value(program, context).integer(c),
+                            ExpDumpResult::Value(v) => v,
+                        };
+
+                        let store_inst = new_value(program, context).store(rhs_value, var_ptr);
+                        insert_instructions(program, context, [store_inst]);
+                    }
+                    var_ptr
                 }
                 None => {
-                    let dest = vardecl_common(program, context, btype, var_def);
-                    context.symbol_tables.insert(
-                        var_def.ident.id.clone(),
-                        SymbolTableEntry::Variable(btype.ty.clone(), dest),
-                    )
+                    // global
+                    let var_ptr = match &var_def.init {
+                        Some(rhs) => match rhs.dump_ir(program, context)? {
+                            ExpDumpResult::Const(c) => {
+                                let init = program.new_value().integer(c);
+                                program.new_value().global_alloc(init)
+                            }
+                            ExpDumpResult::Value(v) => program.new_value().global_alloc(v),
+                        },
+                        None => {
+                            let zero_init =
+                                program.new_value().zero_init(Type::get(btype.ty.clone()));
+                            program.new_value().global_alloc(zero_init)
+                        }
+                    };
+                    program.set_value_name(
+                        var_ptr,
+                        Some(format!(
+                            "@{}_{}",
+                            var_def.ident.id,
+                            context.symbol_tables.depth()
+                        )),
+                    );
+                    var_ptr
                 }
-            }
+            };
+
+            // match &var_def.init {
+            //     Some(rhs) => {
+            //         let dest = vardecl_common(program, context, btype, var_def);
+            //         let res = rhs.dump_ir(program, context)?;
+            //         let rhs_value = match res {
+            //             ExpDumpResult::Const(c) => new_value(program, context).integer(c),
+            //             ExpDumpResult::Value(v) => v,
+            //         };
+            //         let store_inst = new_value(program, context).store(rhs_value, dest);
+            //         insert_instructions(program, context, [store_inst]);
+            //         context.symbol_tables.insert(
+            //             var_def.ident.id.clone(),
+            //             SymbolTableEntry::Variable(btype.ty.clone(), dest),
+            //         );
+            //     }
+            //     None => {
+            //         let dest = vardecl_common(program, context, btype, var_def);
+            //         context.symbol_tables.insert(
+            //             var_def.ident.id.clone(),
+            //             SymbolTableEntry::Variable(btype.ty.clone(), dest),
+            //         )
+            //     }
+            // }
+            context.symbol_tables.insert(
+                var_def.ident.id.clone(),
+                SymbolTableEntry::Variable(btype.ty.clone(), final_var_ptr),
+            );
         }
         Ok(DumpResult::Ok)
     }
 }
 
-fn vardecl_common(
-    program: &mut Program,
-    context: &mut IRContext,
-    btype: &BType,
-    var_def: &VarDef,
-) -> koopa::ir::Value {
-    let dest = new_value(program, context).alloc(Type::get(btype.ty.clone()));
-    program
-        .func_mut(context.curr_func.unwrap())
-        .dfg_mut()
-        .set_value_name(
-            dest,
-            Some(format!(
-                "@{}_{}",
-                var_def.ident.id,
-                context.symbol_tables.depth()
-            )),
-        );
-    insert_instructions(program, context, [dest]);
-    dest
-}
+// fn vardecl_common(
+//     program: &mut Program,
+//     context: &mut IRContext,
+//     btype: &BType,
+//     var_def: &VarDef,
+// ) -> koopa::ir::Value {
+//     let dest = new_value(program, context).alloc(Type::get(btype.ty.clone()));
+//     program
+//         .func_mut(context.curr_func.unwrap())
+//         .dfg_mut()
+//         .set_value_name(
+//             dest,
+//             Some(format!(
+//                 "@{}_{}",
+//                 var_def.ident.id,
+//                 context.symbol_tables.depth()
+//             )),
+//         );
+//     insert_instructions(program, context, [dest]);
+//     dest
+// }
 
 impl ExpDumpIR for InitVal {
     fn dump_ir(
@@ -503,6 +647,26 @@ impl ExpDumpIR for UnaryExp {
                 context,
                 BinaryOp::Eq,
             ),
+            UnaryExp::FuncCall(func_id, params) => {
+                let func = context
+                    .function_table
+                    .get(&func_id.id)
+                    .cloned()
+                    .ok_or_else(|| format!("Function {} not found", &func_id.id))?;
+
+                let mut ir_params = Vec::<koopa::ir::Value>::new();
+                for param in params {
+                    ir_params.push(match param.dump_ir(program, context)? {
+                        ExpDumpResult::Const(c) => new_value(program, context).integer(c),
+                        ExpDumpResult::Value(v) => v,
+                    });
+                }
+
+                let call_inst = new_value(program, context).call(func, ir_params);
+                insert_instructions(program, context, [call_inst]);
+
+                Ok(ExpDumpResult::Value(call_inst))
+            }
         }
     }
 }

@@ -293,15 +293,15 @@ impl<'p, 'c> GenerateValueToAsm<'p, 'c> for Binary {
                 builder.op1("seqz", "t0", "t0")?;
             }
             BinaryOp::Le => {
-                builder.op2("slt", "t0", "t1", "t0")?;
-                builder.op1("seqz", "t0", "t0")?;
-            }
-            BinaryOp::Ge => {
                 builder.op2("slt", "t0", "t0", "t1")?;
                 builder.op1("seqz", "t0", "t0")?;
             }
+            BinaryOp::Ge => {
+                builder.op2("sgt", "t0", "t0", "t1")?;
+                builder.op1("seqz", "t0", "t0")?;
+            }
             BinaryOp::Lt => builder.op2("slt", "t0", "t0", "t1")?,
-            BinaryOp::Gt => builder.op2("sgt", "t0", "t1", "t0")?,
+            BinaryOp::Gt => builder.op2("sgt", "t0", "t0", "t1")?,
             BinaryOp::Sar => builder.op2("sra", "t0", "t0", "t1")?,
             BinaryOp::Add => builder.op2("add", "t0", "t0", "t1")?,
             BinaryOp::Sub => builder.op2("sub", "t0", "t0", "t1")?,

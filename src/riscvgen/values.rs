@@ -72,15 +72,15 @@ impl<'i> AsmValue<'i> {
         match self {
             AsmValue::Global(symbol) => {
                 builder.la(tmp, symbol)?;
-                builder.lw(reg, tmp, 0)
+                builder.sw(reg, tmp, 0)
             }
-            AsmValue::Local(slot) => builder.lw(&reg, "sp", slot.offset as i32),
+            AsmValue::Local(slot) => builder.sw(&reg, "sp", slot.offset as i32),
             AsmValue::Const(_) => unreachable!(),
             AsmValue::Arg(idx) => {
                 if *idx < 8 {
                     builder.mv(reg, &format!("a{}", *idx))
                 } else {
-                    builder.lw(reg, "sp", ((*idx - 8) * 4) as i32)
+                    builder.sw(reg, "sp", ((*idx - 8) * 4) as i32)
                 }
             }
             AsmValue::Void => Ok(()),

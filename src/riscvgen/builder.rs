@@ -67,7 +67,7 @@ impl<'f> AsmBuilder<'f> {
         if (-2048..=2047).contains(&offset) {
             writeln!(self.f, "  sw {rs}, {offset}({addr})")
         } else {
-            self.addi(&self.tmp, addr, offset)?;
+            self.addi(self.tmp, addr, offset)?;
             let tmp = self.tmp;
             writeln!(self.f, "  sw {rs}, 0({tmp})")
         }
@@ -77,7 +77,7 @@ impl<'f> AsmBuilder<'f> {
         if (-2048..=2047).contains(&offset) {
             writeln!(self.f, "  lw {rd}, {offset}({addr})")
         } else {
-            self.addi(&self.tmp, addr, offset)?;
+            self.addi(self.tmp, addr, offset)?;
             let tmp = self.tmp;
             writeln!(self.f, "  lw {rd}, 0({tmp})")
         }

@@ -43,7 +43,7 @@ impl<'p, 'c> GenerateAsm<'p, 'c> for Program {
             let name = &data.name().as_ref().unwrap()[1..];
             context.insert_value(value, name.to_owned());
             writeln!(f, "  .data")?;
-            writeln!(f, "  globl {}", name)?;
+            writeln!(f, "  .globl {name}")?;
             writeln!(f, "{name}:")?;
             data.generate(f, context)?;
             writeln!(f)?;

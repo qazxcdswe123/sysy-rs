@@ -78,7 +78,7 @@ impl FunctionContext {
             };
             let offset = ra + self.alloc_size + args;
             // align to 16
-            let sp_offset = (offset + 15) & 0xF;
+            let sp_offset = (offset + 15) & !15;
             self.sp_offset.set(Some(sp_offset));
             sp_offset
         }
@@ -111,7 +111,7 @@ impl FunctionContext {
                 if self.is_leaf() {
                     offset.map(|o| self.sp_offset() - self.alloc_size + o)
                 } else {
-                    offset.map(|o| o)
+                    offset.map(|o| self.sp_offset() - 4 - self.alloc_size + o)
                 }
             })
     }

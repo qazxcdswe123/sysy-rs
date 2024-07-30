@@ -26,17 +26,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 调用 lalrpop 生成的 parser 解析输入文件
     let ast = sysy::CompUnitParser::new().parse(&input).unwrap();
 
-    let koopa = irgen::generate_ir(&ast).expect("IR build error");
+    let program = irgen::generate_ir(&ast).expect("IR build error");
 
     match mode.as_str() {
         "-koopa" => {
             let mut text_generator = KoopaGenerator::new(vec![]);
-            text_generator.generate_on(&koopa).unwrap();
+            text_generator.generate_on(&program).unwrap();
             std::fs::write(output, text_generator.writer())?;
         }
         "-riscv" => {
-            let mut output_file = std::fs::File::create(output)?;
-            riscvgen::generate_assembly(&koopa, &mut output_file)?;
+            riscvgen::generate_asm(&program, &output)?;
         }
         _ => {
             panic!("Invalid mode");

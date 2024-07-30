@@ -101,7 +101,7 @@ impl<'p, 'c> GenerateAsm<'p, 'c> for FunctionData {
         // generate inst in bb
         for (bb, node) in self.layout().bbs() {
             let bb_name = bb.generate(f, context)?;
-            writeln!(f, "{}:", bb_name)?;
+            writeln!(f, "{bb_name}:")?;
             for &inst in node.insts().keys() {
                 self.dfg().value(inst).generate(f, context)?;
             }

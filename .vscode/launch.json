@@ -7,13 +7,12 @@
             "request": "launch",
             "program": "${workspaceRoot}/target/debug/mvll",
             "args": [
-                "-koopa",
+                "-riscv",
                 "hello.c",
                 "-o",
-                "hello.koopa"
+                "hello.riscv"
             ],
             "cwd": "${workspaceRoot}",
-            "preLaunchTask": "cargo build"
         }
     ]
 }

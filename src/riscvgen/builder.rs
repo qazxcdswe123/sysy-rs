@@ -115,7 +115,7 @@ impl<'f> AsmBuilder<'f> {
         let offset = context.sp_offset() as i32;
         if offset != 0 {
             if !context.is_leaf() {
-                self.sw("ra", "sp", -4)?;
+                self.lw("ra", "sp", -4)?;
             }
             self.addi("sp", "sp", offset)?;
         }

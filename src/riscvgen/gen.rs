@@ -14,7 +14,7 @@ use super::func::FunctionContext;
 use super::values::asm_value;
 use super::values::AsmValue;
 use super::values::LocalValue;
-use super::ProgramContext; // Add this line to import the GenerateAsm trait
+use super::ProgramContext;
 
 pub trait GenerateAsm<'p, 'c> {
     type Out;
@@ -155,6 +155,18 @@ impl<'p, 'c> GenerateValueToAsm<'p, 'c> for ZeroInit {
         v: &ValueData,
     ) -> Result<Self::Out> {
         writeln!(f, "  .zero {}", v.ty().size())
+    }
+}
+
+// global alloc
+impl<'p, 'c> GenerateAsm<'p, 'c> for GlobalAlloc {
+    type Out = ();
+
+    fn generate(&self, f: &mut File, context: &'c mut ProgramContext<'p>) -> Result<Self::Out> {
+        context
+            .program()
+            .borrow_value(self.init())
+            .generate(f, context)
     }
 }
 
@@ -399,6 +411,7 @@ impl<'p, 'c> GenerateAsm<'p, 'c> for ValueData {
             ValueKind::Jump(j) => j.generate(f, context),
             ValueKind::Call(c) => c.generate(f, context, self),
             ValueKind::Return(r) => r.generate(f, context),
+            ValueKind::GlobalAlloc(g) => g.generate(f, context),
             _ => Ok(()),
         }
     }

@@ -78,7 +78,7 @@ impl<'i> AsmValue<'i> {
             AsmValue::Const(_) => unreachable!(),
             AsmValue::Arg(idx) => {
                 if *idx < 8 {
-                    builder.mv(reg, &format!("a{}", *idx))
+                    builder.mv(&format!("a{}", *idx), reg)
                 } else {
                     builder.sw(reg, "sp", ((*idx - 8) * 4) as i32)
                 }

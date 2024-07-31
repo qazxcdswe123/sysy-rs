@@ -31,7 +31,8 @@ FuncDef: FuncDef = {
 };
 
 FuncFParam: FuncFParam = {
-  <btype: BType> <ident: IDENT> => FuncFParam { btype, ident }
+  <btype: BType> <ident: IDENT> => FuncFParam { btype, ident, array: None },
+  <btype: BType> <ident: IDENT> "[" "]" <index: ("[" <Exp> "]")*> => FuncFParam { btype, ident, array: Some(index) },
 };
 
 FuncParams: Vec<FuncFParam> = <p: FuncFParam> <ps: ("," <FuncFParam>)*> => {
@@ -79,18 +80,25 @@ VarDecl: VarDecl = <btype: BType> <var_def: VarDef> <defs: ("," <VarDef>)*> ";" 
 };
 
 VarDef: VarDef = {
-  <ident: IDENT> <init: ("="  <InitVal>)?> => VarDef{ident, init}
+  <ident: IDENT> <shape: ("[" <Exp> "]")*> <init: ("="  <InitVal>)?> => VarDef{ident, init, array: shape},
 };
 
 InitVal: InitVal = {
   <exp: Exp> => InitVal::Exp(<>),
+  "{" "}" => InitVal::Aggregate(Vec::<Box<InitVal>>::new()),
+  "{" <init_val: InitVal> <init_vals: ("," <InitVal>)*> "}" => {
+    let mut vec = Vec::<Box<InitVal>>::new();
+    vec.push(Box::new(init_val));
+    for v in init_vals {
+      vec.push(Box::new(v));
+    }
+    InitVal::Aggregate(vec)
+  },
 };
 
-ConstDef: ConstDef = <ident: IDENT> "=" <const_init_val: ConstInitVal> => ConstDef{ident, const_init_val};
-
-ConstInitVal: ConstInitVal = <exp: ConstExp> => ConstInitVal::ConstExp(<>);
-
-ConstExp: ConstExp = <exp: Exp> => ConstExp{ <> };
+ConstDef: ConstDef = { 
+  <ident: IDENT> <idx: ("[" <Exp> "]")*> "=" <init_val: InitVal> => ConstDef{ident, init_val, array: idx},
+}
 
 ConstDecl: ConstDecl = "const" <btype: BType> <const_def: ConstDef> <defs: ("," <ConstDef>)*> ";" => {
   let mut const_defs = Vec::<ConstDef>::new();
@@ -134,7 +142,9 @@ PrimaryExp: PrimaryExp = {
   LVal => PrimaryExp::LVal(<>),
 };
 
-LVal: LVal = <ident: IDENT> => LVal{<>};
+LVal: LVal = {
+  <ident: IDENT> <index: ("[" <Exp> "]")*> => LVal{ident, exp: index}
+};
 
 UnaryExp: UnaryExp = {
   <primary_exp: PrimaryExp> => UnaryExp::PrimaryExp(<>),

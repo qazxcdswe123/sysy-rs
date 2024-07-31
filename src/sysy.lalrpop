@@ -25,7 +25,6 @@ pub Unit: Unit = {
 
 FuncDef: FuncDef = {
   <func_type: BType> <ident: IDENT> "(" <params: (FuncParams)?> ")" <block: Block> => {
-    // FuncDef { <> }
     FuncDef { func_type, ident, params: params.unwrap_or(Vec::new()), block }
   }
 };
@@ -44,7 +43,7 @@ FuncParams: Vec<FuncFParam> = <p: FuncFParam> <ps: ("," <FuncFParam>)*> => {
   vec
 };
 
-FuncRPrams: Vec<Exp> = <exp: Exp> <exps: ("," <Exp>)*> => {
+FuncRParams: Vec<Exp> = <exp: Exp> <exps: ("," <Exp>)*> => {
   let mut vec = Vec::<Exp>::new();
   vec.push(exp);
   for e in exps {
@@ -151,7 +150,7 @@ UnaryExp: UnaryExp = {
   "+" <unary_exp: UnaryExp> => UnaryExp::PlusUnaryExp(Box::new(<>)),
   "-" <unary_exp: UnaryExp> => UnaryExp::MinusUnaryExp(Box::new(<>)),
   "!" <unary_exp: UnaryExp> => UnaryExp::NotUnaryExp(Box::new(<>)),
-  <i: IDENT> "(" <params: (FuncRPrams)?> ")" => UnaryExp::FuncCall(i, params.unwrap_or(Vec::new())),
+  <i: IDENT> "(" <params: (FuncRParams)?> ")" => UnaryExp::FuncCall(i, params.unwrap_or(Vec::new())),
 };
 
 AddExp: AddExp = {

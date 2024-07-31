@@ -170,14 +170,7 @@ impl DumpIR for FuncDef {
             program
                 .func_mut(context.curr_func.unwrap())
                 .dfg_mut()
-                .set_value_name(
-                    parameters,
-                    Some(format!(
-                        "%{}_{}param",
-                        param.ident.id,
-                        context.symbol_tables.depth()
-                    )),
-                );
+                .set_value_name(parameters, Some(format!("%{}param", param.ident.id,)));
 
             context.symbol_tables.insert(
                 param.ident.id.clone(),
@@ -203,7 +196,6 @@ impl DumpIR for Block {
         context: &mut IRContext,
     ) -> Result<DumpResult, String> {
         let mut block_res = DumpResult::Ok;
-        context.symbol_tables.new_table();
         for item in &self.items {
             let res = item.dump_ir(program, context)?;
             // early return in block
@@ -259,14 +251,10 @@ impl DumpIR for VarDecl {
             let final_var_ptr = if let Some(func) = context.curr_func {
                 // local function
                 let var_ptr = new_value(program, context).alloc(Type::get(var_type.clone()));
-                program.func_mut(func).dfg_mut().set_value_name(
-                    var_ptr,
-                    Some(format!(
-                        "@{}_{}",
-                        var_def.ident.id,
-                        context.symbol_tables.depth()
-                    )),
-                );
+                program
+                    .func_mut(func)
+                    .dfg_mut()
+                    .set_value_name(var_ptr, Some(format!("@{}", var_def.ident.id,)));
                 insert_instructions(program, context, [var_ptr]);
 
                 let rhs_res = if let Some(rhs) = &var_def.init {
@@ -307,14 +295,7 @@ impl DumpIR for VarDecl {
                         program.new_value().global_alloc(zero_init)
                     }
                 };
-                program.set_value_name(
-                    var_ptr,
-                    Some(format!(
-                        "@{}_{}",
-                        var_def.ident.id.clone(),
-                        context.symbol_tables.depth()
-                    )),
-                );
+                program.set_value_name(var_ptr, Some(format!("@{}", var_def.ident.id.clone(),)));
                 var_ptr
             };
 
@@ -326,28 +307,6 @@ impl DumpIR for VarDecl {
         Ok(DumpResult::Ok)
     }
 }
-
-// fn vardecl_common(
-//     program: &mut Program,
-//     context: &mut IRContext,
-//     btype: &BType,
-//     var_def: &VarDef,
-// ) -> koopa::ir::Value {
-//     let dest = new_value(program, context).alloc(Type::get(btype.ty.clone()));
-//     program
-//         .func_mut(context.curr_func.unwrap())
-//         .dfg_mut()
-//         .set_value_name(
-//             dest,
-//             Some(format!(
-//                 "@{}_{}",
-//                 var_def.ident.id,
-//                 context.symbol_tables.depth()
-//             )),
-//         );
-//     insert_instructions(program, context, [dest]);
-//     dest
-// }
 
 impl InitVal {
     pub fn dump_ir(
@@ -406,14 +365,7 @@ impl DumpIR for ConstDecl {
                         dest
                     } else {
                         let dest = program.new_value().global_alloc(aggr);
-                        program.set_value_name(
-                            dest,
-                            Some(format!(
-                                "@{}_{}",
-                                const_def.ident.id,
-                                context.symbol_tables.depth()
-                            )),
-                        );
+                        program.set_value_name(dest, Some(format!("@{}", const_def.ident.id,)));
                         dest
                     };
                     context.symbol_tables.insert(
@@ -510,7 +462,10 @@ impl DumpIR for BasicStmt {
                     Ok(DumpResult::Ok)
                 }
             }
-            BasicStmt::BlockStmt(b) => b.dump_ir(program, context),
+            BasicStmt::BlockStmt(b) => {
+                context.symbol_tables.new_table();
+                b.dump_ir(program, context)
+            }
             BasicStmt::IfElseStmt(cond, s1, option_s2) => {
                 let cond_val = match cond.dump_ir(program, context)? {
                     ExpDumpResult::Const(c) => new_value(program, context).integer(c),
@@ -765,32 +720,34 @@ impl LVal {
 fn get_element_in_ndarray(
     program: &mut Program,
     context: &mut IRContext,
-    arr: Value,
+    arr_or_ptr: Value,
     indexes: &[Value],
 ) -> LValDumpResult {
     if indexes.is_empty() {
         // arr is the final result
-        let value_data = get_valuedata(program, context, arr);
+        let value_data = get_valuedata(program, context, arr_or_ptr);
         match value_data.ty().kind() {
             TypeKind::Pointer(ty) => match ty.kind() {
                 TypeKind::Array(_, _) => {
                     let zero = new_value(program, context).integer(0);
-                    let elem = new_value(program, context).get_elem_ptr(arr, zero);
+                    let elem = new_value(program, context).get_elem_ptr(arr_or_ptr, zero);
                     insert_instructions(program, context, [elem]);
                     LValDumpResult::Temp(elem)
                 }
-                _ => LValDumpResult::Addr(arr),
+                _ => LValDumpResult::Addr(arr_or_ptr),
             },
             _ => unreachable!(),
         }
     } else {
         // arr is an array
-        let value_data = get_valuedata(program, context, arr);
+        let value_data = get_valuedata(program, context, arr_or_ptr);
         let elem = match value_data.ty().kind() {
             TypeKind::Pointer(base) => match base.kind() {
-                TypeKind::Array(_, _) => new_value(program, context).get_elem_ptr(arr, indexes[0]),
+                TypeKind::Array(_, _) => {
+                    new_value(program, context).get_elem_ptr(arr_or_ptr, indexes[0])
+                }
                 TypeKind::Pointer(_) => {
-                    let loaded_ptr = new_value(program, context).load(arr);
+                    let loaded_ptr = new_value(program, context).load(arr_or_ptr);
                     insert_instructions(program, context, [loaded_ptr]);
                     new_value(program, context).get_ptr(loaded_ptr, indexes[0])
                 }

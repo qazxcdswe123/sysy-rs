@@ -106,10 +106,6 @@ impl SymbolTables {
     fn pop_table(&mut self) {
         self.symbol_tables.pop();
     }
-
-    fn depth(&self) -> usize {
-        self.symbol_tables.len() - 1
-    }
 }
 
 fn new_value<'a>(program: &'a mut Program, context: &'a mut IRContext) -> LocalBuilder<'a> {

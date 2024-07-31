@@ -1,13 +1,14 @@
 use koopa::ir::{
     builder::{BasicBlockBuilder, GlobalInstBuilder, LocalInstBuilder, ValueBuilder},
-    BinaryOp, FunctionData, Program, Type,
+    BinaryOp, FunctionData, Program, Type, TypeKind, Value,
 };
 
 use crate::{ast::*, irgen::insert_basic_blocks};
 
 use super::{
+    aggregate_to_store, build_new_aggregate, build_shape, get_arr_type, get_valuedata,
     insert_instructions, new_block, new_value, DumpIR, DumpResult, ExpDumpIR, ExpDumpResult,
-    IRContext, SymbolTableEntry,
+    IRContext, InitValDumpResult, LValDumpResult, SymbolTableEntry,
 };
 
 /// Values may be none when calculating const.
@@ -128,10 +129,14 @@ impl DumpIR for FuncDef {
     ) -> Result<DumpResult, String> {
         let mut ir_params = Vec::<(Option<String>, Type)>::new();
         for param in &self.params {
-            ir_params.push((
-                Some(format!("%{}_param", param.ident.id)),
-                Type::get(param.btype.ty.clone()),
-            ))
+            let param_name = Some(format!("%{}_param", param.ident.id));
+            let param_type = if let Some(array) = &param.array {
+                let shape = build_shape(program, context, array)?;
+                Type::get_pointer(Type::get(get_arr_type(&param.btype, &shape)))
+            } else {
+                Type::get(param.btype.ty.clone())
+            };
+            ir_params.push((param_name, param_type));
         }
         let func_ret_ty = self.func_type.ty.clone();
         let func = program.new_func(FunctionData::with_param_names(
@@ -152,10 +157,16 @@ impl DumpIR for FuncDef {
         let parameter_count = program.func(context.curr_func.unwrap()).params().len();
         for idx in 0..parameter_count {
             let param = &self.params[idx];
-            // curr_param
+            // real param
             let arguments = program.func(context.curr_func.unwrap()).params()[idx];
-            // param_value
-            let parameters = new_value(program, context).alloc(Type::get(param.btype.ty.clone()));
+            // formal param
+            let parameter_type = if let Some(shape) = &param.array {
+                let shape = build_shape(program, context, &shape)?;
+                Type::get_pointer(Type::get(get_arr_type(&param.btype, &shape)))
+            } else {
+                Type::get(param.btype.ty.clone())
+            };
+            let parameters = new_value(program, context).alloc(parameter_type);
             program
                 .func_mut(context.curr_func.unwrap())
                 .dfg_mut()
@@ -238,11 +249,16 @@ impl DumpIR for VarDecl {
         program: &mut Program,
         context: &mut IRContext,
     ) -> Result<DumpResult, String> {
-        let btype = &self.btype;
         for var_def in &self.var_defs {
+            let shape = build_shape(program, context, &var_def.array)?;
+            let var_type = match shape.is_empty() {
+                true => self.btype.ty.clone(),
+                false => get_arr_type(&self.btype, &shape),
+            };
+
             let final_var_ptr = if let Some(func) = context.curr_func {
                 // local function
-                let var_ptr = new_value(program, context).alloc(Type::get(btype.ty.clone()));
+                let var_ptr = new_value(program, context).alloc(Type::get(var_type.clone()));
                 program.func_mut(func).dfg_mut().set_value_name(
                     var_ptr,
                     Some(format!(
@@ -253,29 +269,41 @@ impl DumpIR for VarDecl {
                 );
                 insert_instructions(program, context, [var_ptr]);
 
-                if let Some(rhs) = &var_def.init {
-                    let res = rhs.dump_ir(program, context)?;
-                    let rhs_value = match res {
-                        ExpDumpResult::Const(c) => new_value(program, context).integer(c),
-                        ExpDumpResult::Value(v) => v,
-                    };
+                let rhs_res = if let Some(rhs) = &var_def.init {
+                    let res = rhs.dump_ir(program, context, &shape)?;
+                    match res {
+                        InitValDumpResult::Const(c) => Some(new_value(program, context).integer(c)),
+                        InitValDumpResult::Value(v) => Some(v),
+                        InitValDumpResult::Aggregate(a) => {
+                            aggregate_to_store(program, context, a, var_ptr);
+                            None
+                        }
+                    }
+                    // let store_inst = new_value(program, context).store(rhs_value, var_ptr);
+                    // insert_instructions(program, context, [store_inst]);
+                } else {
+                    None
+                };
 
-                    let store_inst = new_value(program, context).store(rhs_value, var_ptr);
+                if let Some(rhs) = rhs_res {
+                    let store_inst = new_value(program, context).store(rhs, var_ptr);
                     insert_instructions(program, context, [store_inst]);
                 }
+
                 var_ptr
             } else {
                 // global
                 let var_ptr = match &var_def.init {
-                    Some(rhs) => match rhs.dump_ir(program, context)? {
-                        ExpDumpResult::Const(c) => {
+                    Some(rhs) => match rhs.dump_ir(program, context, &shape)? {
+                        InitValDumpResult::Const(c) => {
                             let init = program.new_value().integer(c);
                             program.new_value().global_alloc(init)
                         }
-                        ExpDumpResult::Value(v) => program.new_value().global_alloc(v),
+                        InitValDumpResult::Value(v) => program.new_value().global_alloc(v),
+                        InitValDumpResult::Aggregate(a) => program.new_value().global_alloc(a),
                     },
                     None => {
-                        let zero_init = program.new_value().zero_init(Type::get(btype.ty.clone()));
+                        let zero_init = program.new_value().zero_init(Type::get(var_type.clone()));
                         program.new_value().global_alloc(zero_init)
                     }
                 };
@@ -283,7 +311,7 @@ impl DumpIR for VarDecl {
                     var_ptr,
                     Some(format!(
                         "@{}_{}",
-                        var_def.ident.id,
+                        var_def.ident.id.clone(),
                         context.symbol_tables.depth()
                     )),
                 );
@@ -292,7 +320,7 @@ impl DumpIR for VarDecl {
 
             context.symbol_tables.insert(
                 var_def.ident.id.clone(),
-                SymbolTableEntry::Variable(btype.ty.clone(), final_var_ptr),
+                SymbolTableEntry::Variable(var_type, final_var_ptr),
             );
         }
         Ok(DumpResult::Ok)
@@ -321,17 +349,29 @@ impl DumpIR for VarDecl {
 //     dest
 // }
 
-impl ExpDumpIR for InitVal {
-    fn dump_ir(
+impl InitVal {
+    pub fn dump_ir(
         &self,
         program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ExpDumpResult, String> {
-        // let InitVal::Exp(exp) = self;
-        // exp.dump_ir(program, context)
+        shape: &[usize],
+    ) -> Result<InitValDumpResult, String> {
+        let is_global = context.curr_func.is_none();
         match self {
-            InitVal::Exp(exp) => exp.dump_ir(program, context),
-            InitVal::Aggregate(_) => todo!(),
+            InitVal::Exp(exp) => match exp.dump_ir(program, context)? {
+                ExpDumpResult::Const(c) => Ok(InitValDumpResult::Const(c)),
+                ExpDumpResult::Value(v) => {
+                    if is_global {
+                        Err("Global variable must be initialized with constant".to_string())
+                    } else {
+                        Ok(InitValDumpResult::Value(v))
+                    }
+                }
+            },
+            InitVal::Aggregate(children) => {
+                let (value, _) = build_new_aggregate(program, context, shape, children, is_global)?;
+                Ok(InitValDumpResult::Aggregate(value))
+            }
         }
     }
 }
@@ -344,19 +384,44 @@ impl DumpIR for ConstDecl {
     ) -> Result<DumpResult, String> {
         let ty = &self.btype.ty;
         for const_def in &self.const_defs {
-            let res = const_def.init_val.dump_ir(program, context)?;
+            let shape = build_shape(program, context, &const_def.array)?;
+            let res = const_def.init_val.dump_ir(program, context, &shape)?;
             match res {
-                ExpDumpResult::Const(c) => {
+                InitValDumpResult::Const(c) => {
                     context.symbol_tables.insert(
                         const_def.ident.id.clone(),
-                        SymbolTableEntry::Constant(ty.clone(), vec![c]),
+                        SymbolTableEntry::Constant(ty.clone(), c),
                     );
                 }
-                ExpDumpResult::Value(_) => {
+                InitValDumpResult::Value(_) => {
                     return Err(format!(
                         "Const {} is not a constant expression",
                         const_def.ident.id,
                     ));
+                }
+                InitValDumpResult::Aggregate(aggr) => {
+                    let array_ptr = if context.curr_func.is_some() {
+                        let aggr_valuedata = get_valuedata(program, context, aggr);
+                        let dest = new_value(program, context).alloc(aggr_valuedata.ty().clone());
+                        insert_instructions(program, context, [dest]);
+                        aggregate_to_store(program, context, aggr, dest);
+                        dest
+                    } else {
+                        let dest = program.new_value().global_alloc(aggr);
+                        program.set_value_name(
+                            dest,
+                            Some(format!(
+                                "@{}_{}",
+                                const_def.ident.id,
+                                context.symbol_tables.depth()
+                            )),
+                        );
+                        dest
+                    };
+                    context.symbol_tables.insert(
+                        const_def.ident.id.clone(),
+                        SymbolTableEntry::Variable(ty.clone(), array_ptr),
+                    );
                 }
             }
         }
@@ -422,10 +487,10 @@ impl DumpIR for BasicStmt {
             BasicStmt::AssignStmt(lval, rhs_exp) => {
                 let res1 = lval.dump_ir(program, context)?;
                 let lval_dest = match res1 {
-                    ExpDumpResult::Const(_) => {
-                        return Err("LVal is should not be const".to_string());
+                    LValDumpResult::Const(_) | LValDumpResult::Temp(_) => {
+                        return Err("LVal cannot be constant".to_string())
                     }
-                    ExpDumpResult::Value(v) => v,
+                    LValDumpResult::Addr(a) => a,
                 };
                 let res2 = rhs_exp.dump_ir(program, context)?;
                 let rhs_value = match res2 {
@@ -594,21 +659,43 @@ impl ExpDumpIR for UnaryExp {
                 BinaryOp::Eq,
             ),
             UnaryExp::FuncCall(func_id, params) => {
-                let func = context
+                let callee_func = context
                     .function_table
                     .get(&func_id.id)
                     .cloned()
-                    .ok_or_else(|| format!("Function {} not found", &func_id.id))?;
+                    .ok_or_else(|| format!("Function {} not declared", &func_id.id))?;
 
-                let mut ir_params = Vec::<koopa::ir::Value>::new();
-                for param in params {
-                    ir_params.push(match param.dump_ir(program, context)? {
+                let TypeKind::Function(parameter_types, _) = program.func(callee_func).ty().kind()
+                else {
+                    unreachable!()
+                };
+                // TODO: why
+                let parameter_types = parameter_types.clone();
+                if params.len() != parameter_types.len() {
+                    return Err(format!(
+                        "Function {} expects {} parameters, but got {}",
+                        &func_id.id,
+                        parameter_types.len(),
+                        params.len()
+                    ));
+                }
+                let mut arguments = vec![];
+                for (idx, param) in params.iter().enumerate() {
+                    let argument_value = match param.dump_ir(program, context)? {
                         ExpDumpResult::Const(c) => new_value(program, context).integer(c),
                         ExpDumpResult::Value(v) => v,
-                    });
+                    };
+                    let arg_type = get_valuedata(program, context, argument_value).ty().clone();
+                    if arg_type != parameter_types[idx] {
+                        return Err(format!(
+                            "Function {} expects parameter {} to be of type {}, but got {}",
+                            &func_id.id, idx, parameter_types[idx], arg_type
+                        ));
+                    }
+                    arguments.push(argument_value);
                 }
 
-                let call_inst = new_value(program, context).call(func, ir_params);
+                let call_inst = new_value(program, context).call(callee_func, arguments);
                 insert_instructions(program, context, [call_inst]);
 
                 Ok(ExpDumpResult::Value(call_inst))
@@ -626,37 +713,90 @@ impl ExpDumpIR for PrimaryExp {
         match self {
             PrimaryExp::ParenExp(exp) => exp.dump_ir(program, context),
             PrimaryExp::Number(n) => n.dump_ir(program, context),
-            PrimaryExp::LVal(lval) => match context.symbol_tables.get(&lval.ident.id) {
-                Some(SymbolTableEntry::Constant(_, _)) => lval.dump_ir(program, context),
-                Some(SymbolTableEntry::Variable(_, _)) => {
-                    let res = lval.dump_ir(program, context)?;
-                    match res {
-                        ExpDumpResult::Const(_) => Ok(res),
-                        ExpDumpResult::Value(v) => {
-                            // load the value
-                            let load_inst = new_value(program, context).load(v);
-                            insert_instructions(program, context, [load_inst]);
-                            Ok(ExpDumpResult::Value(load_inst))
+            PrimaryExp::LVal(lval) => {
+                let res = lval.dump_ir(program, context)?;
+                match res {
+                    LValDumpResult::Const(c) => Ok(ExpDumpResult::Const(c)),
+                    LValDumpResult::Temp(v) => Ok(ExpDumpResult::Value(v)),
+                    LValDumpResult::Addr(v) => {
+                        match get_valuedata(program, context, v).ty().kind() {
+                            TypeKind::Pointer(_) => {
+                                let loaded = new_value(program, context).load(v);
+                                insert_instructions(program, context, [loaded]);
+                                Ok(ExpDumpResult::Value(loaded))
+                            }
+                            _ => unreachable!(),
                         }
                     }
                 }
-                None => Err(format!("Variable {} not found", lval.ident.id)),
-            },
+            }
         }
     }
 }
 
-impl ExpDumpIR for LVal {
-    fn dump_ir(
+impl LVal {
+    pub fn dump_ir(
         &self,
-        _program: &mut Program,
+        program: &mut Program,
         context: &mut IRContext,
-    ) -> Result<ExpDumpResult, String> {
+    ) -> Result<LValDumpResult, String> {
         match context.symbol_tables.get(&self.ident.id) {
-            Some(SymbolTableEntry::Variable(_tk, val)) => Ok(ExpDumpResult::Value(*val)),
-            Some(SymbolTableEntry::Constant(_tk, val)) => Ok(ExpDumpResult::Const(val[0])),
+            Some(SymbolTableEntry::Constant(_, c)) => Ok(LValDumpResult::Const(*c)),
+            Some(SymbolTableEntry::Variable(_, ptr)) => {
+                let ptr = ptr.clone();
+
+                let mut index_values = vec![];
+                for exp in &self.exp {
+                    let res = exp.dump_ir(program, context)?;
+                    index_values.push(match res {
+                        ExpDumpResult::Const(c) => new_value(program, context).integer(c),
+                        ExpDumpResult::Value(v) => v,
+                    })
+                }
+                let result = get_element_in_ndarray(program, context, ptr, &index_values);
+
+                Ok(result)
+            }
             None => Err(format!("Variable {} not found", self.ident.id)),
         }
+    }
+}
+
+fn get_element_in_ndarray(
+    program: &mut Program,
+    context: &mut IRContext,
+    arr: Value,
+    indexes: &[Value],
+) -> LValDumpResult {
+    if indexes.is_empty() {
+        // arr is the final result
+        let value_data = get_valuedata(program, context, arr);
+        match value_data.ty().kind() {
+            TypeKind::Array(_, _) => {
+                let zero = new_value(program, context).integer(0);
+                let index0 = new_value(program, context).get_elem_ptr(arr, zero);
+                insert_instructions(program, context, [index0]);
+                LValDumpResult::Temp(index0)
+            }
+            _ => LValDumpResult::Addr(arr),
+        }
+    } else {
+        // arr is an array
+        let value_data = get_valuedata(program, context, arr);
+        let elem = match value_data.ty().kind() {
+            TypeKind::Pointer(base) => match base.kind() {
+                TypeKind::Array(_, _) => new_value(program, context).get_elem_ptr(arr, indexes[0]),
+                TypeKind::Pointer(_) => {
+                    let loaded_ptr = new_value(program, context).load(arr);
+                    insert_instructions(program, context, [loaded_ptr]);
+                    new_value(program, context).get_elem_ptr(loaded_ptr, indexes[0])
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        };
+        insert_instructions(program, context, [elem]);
+        get_element_in_ndarray(program, context, elem, &indexes[1..])
     }
 }
 

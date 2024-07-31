@@ -95,7 +95,7 @@ pub struct VarDef {
     pub ident: IDENT,
     pub init: Option<InitVal>,
     // TODO: check option
-    pub array:Vec<Exp>,
+    pub array: Vec<Exp>,
 }
 
 pub enum InitVal {
@@ -112,7 +112,7 @@ pub struct ConstDef {
     pub ident: IDENT,
     pub init_val: InitVal,
     // TODO: check option
-    pub array:Vec<Exp>,
+    pub array: Vec<Exp>,
 }
 
 pub enum BasicStmt {

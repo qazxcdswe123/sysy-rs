@@ -1,11 +1,11 @@
+mod builder;
 mod func;
 mod gen;
-mod builder;
 mod values;
 
 use func::FunctionContext;
-use r#gen::GenerateAsm;
 use koopa::ir::{Program, Type, Value};
+use r#gen::GenerateAsm;
 use std::{collections::HashMap, fs::File, io::Result};
 
 pub fn generate_asm(program: &Program, path: &str) -> Result<()> {

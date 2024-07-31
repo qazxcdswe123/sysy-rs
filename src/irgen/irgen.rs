@@ -181,7 +181,7 @@ impl DumpIR for FuncDef {
 
             context.symbol_tables.insert(
                 param.ident.id.clone(),
-                SymbolTableEntry::Variable(param.btype.ty.clone(), parameters),
+                SymbolTableEntry::Variable(parameters),
             );
             let assign_inst = new_value(program, context).store(arguments, parameters);
             insert_instructions(program, context, [parameters, assign_inst]);
@@ -320,7 +320,7 @@ impl DumpIR for VarDecl {
 
             context.symbol_tables.insert(
                 var_def.ident.id.clone(),
-                SymbolTableEntry::Variable(var_type, final_var_ptr),
+                SymbolTableEntry::Variable(final_var_ptr),
             );
         }
         Ok(DumpResult::Ok)
@@ -382,16 +382,14 @@ impl DumpIR for ConstDecl {
         program: &mut Program,
         context: &mut IRContext,
     ) -> Result<DumpResult, String> {
-        let ty = &self.btype.ty;
         for const_def in &self.const_defs {
             let shape = build_shape(program, context, &const_def.array)?;
             let res = const_def.init_val.dump_ir(program, context, &shape)?;
             match res {
                 InitValDumpResult::Const(c) => {
-                    context.symbol_tables.insert(
-                        const_def.ident.id.clone(),
-                        SymbolTableEntry::Constant(ty.clone(), c),
-                    );
+                    context
+                        .symbol_tables
+                        .insert(const_def.ident.id.clone(), SymbolTableEntry::Constant(c));
                 }
                 InitValDumpResult::Value(_) => {
                     return Err(format!(
@@ -420,7 +418,7 @@ impl DumpIR for ConstDecl {
                     };
                     context.symbol_tables.insert(
                         const_def.ident.id.clone(),
-                        SymbolTableEntry::Variable(ty.clone(), array_ptr),
+                        SymbolTableEntry::Variable(array_ptr),
                     );
                 }
             }
@@ -741,8 +739,8 @@ impl LVal {
         context: &mut IRContext,
     ) -> Result<LValDumpResult, String> {
         match context.symbol_tables.get(&self.ident.id) {
-            Some(SymbolTableEntry::Constant(_, c)) => Ok(LValDumpResult::Const(*c)),
-            Some(SymbolTableEntry::Variable(_, ptr)) => {
+            Some(SymbolTableEntry::Constant(c)) => Ok(LValDumpResult::Const(*c)),
+            Some(SymbolTableEntry::Variable(ptr)) => {
                 let ptr = ptr.clone();
 
                 let mut index_values = vec![];

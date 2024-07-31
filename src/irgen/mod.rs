@@ -81,8 +81,8 @@ pub struct SymbolTables {
 }
 
 pub enum SymbolTableEntry {
-    Variable(TypeKind, Value),
-    Constant(TypeKind, i32),
+    Variable(Value),
+    Constant(i32),
 }
 
 impl SymbolTables {

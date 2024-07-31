@@ -483,6 +483,7 @@ impl DumpIR for BasicStmt {
                 Ok(DumpResult::Abort)
             }
             BasicStmt::AssignStmt(lval, rhs_exp) => {
+                // lval
                 let res1 = lval.dump_ir(program, context)?;
                 let lval_dest = match res1 {
                     LValDumpResult::Const(_) | LValDumpResult::Temp(_) => {
@@ -490,12 +491,13 @@ impl DumpIR for BasicStmt {
                     }
                     LValDumpResult::Addr(a) => a,
                 };
+                // rhs
                 let res2 = rhs_exp.dump_ir(program, context)?;
                 let rhs_value = match res2 {
                     ExpDumpResult::Const(c) => new_value(program, context).integer(c),
                     ExpDumpResult::Value(v) => v,
                 };
-
+                // assign
                 let store_inst = new_value(program, context).store(rhs_value, lval_dest);
                 insert_instructions(program, context, [store_inst]);
                 Ok(DumpResult::Ok)
@@ -770,13 +772,16 @@ fn get_element_in_ndarray(
         // arr is the final result
         let value_data = get_valuedata(program, context, arr);
         match value_data.ty().kind() {
-            TypeKind::Array(_, _) => {
-                let zero = new_value(program, context).integer(0);
-                let index0 = new_value(program, context).get_elem_ptr(arr, zero);
-                insert_instructions(program, context, [index0]);
-                LValDumpResult::Temp(index0)
-            }
-            _ => LValDumpResult::Addr(arr),
+            TypeKind::Pointer(ty) => match ty.kind() {
+                TypeKind::Array(_, _) => {
+                    let zero = new_value(program, context).integer(0);
+                    let elem = new_value(program, context).get_elem_ptr(arr, zero);
+                    insert_instructions(program, context, [elem]);
+                    LValDumpResult::Temp(elem)
+                }
+                _ => LValDumpResult::Addr(arr),
+            },
+            _ => unreachable!(),
         }
     } else {
         // arr is an array
@@ -787,7 +792,7 @@ fn get_element_in_ndarray(
                 TypeKind::Pointer(_) => {
                     let loaded_ptr = new_value(program, context).load(arr);
                     insert_instructions(program, context, [loaded_ptr]);
-                    new_value(program, context).get_elem_ptr(loaded_ptr, indexes[0])
+                    new_value(program, context).get_ptr(loaded_ptr, indexes[0])
                 }
                 _ => unreachable!(),
             },

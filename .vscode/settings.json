@@ -10,13 +10,17 @@
         "irgen",
         "koopa",
         "Koopa",
+        "lalrpop",
         "lval",
         "ndarray",
         "putarray",
         "putch",
         "putint",
+        "riscv",
+        "riscvgen",
         "starttime",
         "stoptime",
+        "sysy",
         "valuedata",
         "vardecl"
     ]

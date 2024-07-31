@@ -7,10 +7,10 @@
             "request": "launch",
             "program": "${workspaceRoot}/target/debug/mvll",
             "args": [
-                "-riscv",
+                "-koopa",
                 "hello.c",
                 "-o",
-                "hello.riscv"
+                "hello.koopa"
             ],
             "cwd": "${workspaceRoot}",
         }

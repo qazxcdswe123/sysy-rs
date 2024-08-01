@@ -14,11 +14,11 @@ lalrpop_mod!(sysy);
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 解析命令行参数
     let mut args = args();
-    args.next();
-    let mode = args.next().expect("No mode specified");
-    let input = args.next().expect("No input file specified");
-    args.next();
-    let output = args.next().expect("No output file specified");
+    args.next(); // compiler
+    let mode = args.next().expect("No mode specified"); // -S
+    args.next(); // -o
+    let output = args.next().expect("No output file specified"); // output.s
+    let input = args.next().expect("No input file specified"); // input.sy
 
     // 读取输入文件
     let input = read_to_string(input)?;
@@ -35,6 +35,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::fs::write(output, text_generator.writer())?;
         }
         "-riscv" => {
+            riscvgen::generate_asm(&program, &output)?;
+        }
+        "-S" => {
             riscvgen::generate_asm(&program, &output)?;
         }
         _ => {

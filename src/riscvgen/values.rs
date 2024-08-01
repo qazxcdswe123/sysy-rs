@@ -68,14 +68,13 @@ impl<'i> AsmValue<'i> {
 
     /// Read the value from the register
     pub fn read_from(&self, f: &mut File, reg: &'static str, tmp: &'static str) -> Result<()> {
-        let mut builder = AsmBuilder::new(f, reg);
+        let mut builder = AsmBuilder::new(f, tmp);
         match self {
             AsmValue::Global(symbol) => {
                 builder.la(tmp, symbol)?;
                 builder.sw(reg, tmp, 0)
             }
             AsmValue::Local(slot) => builder.sw(&reg, "sp", slot.offset as i32),
-            AsmValue::Const(_) => unreachable!(),
             AsmValue::Arg(idx) => {
                 if *idx < 8 {
                     builder.mv(&format!("a{}", *idx), reg)
@@ -84,6 +83,7 @@ impl<'i> AsmValue<'i> {
                 }
             }
             AsmValue::Void => Ok(()),
+            AsmValue::Const(_) => unreachable!(),
         }
     }
 }

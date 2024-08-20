@@ -1,3 +1,13 @@
+# 使用方法
+
+```shell
+just riscv lv9 # 编译并运行RISC-V代码
+```
+
+```
+
+```
+
 # Reference
 
 - <https://github.com/xhzgenius/Compiler-Lab>
